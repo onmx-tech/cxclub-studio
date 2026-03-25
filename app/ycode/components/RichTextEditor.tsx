@@ -285,10 +285,20 @@ const RichTextImageWithNodeView = RichTextImage.extend({
       container.addEventListener('click', () => {
         const pos = getPos();
         if (typeof pos === 'number' && editor.isEditable) {
-          const tr = editor.state.tr.setSelection(
-            NodeSelection.create(editor.state.doc, pos)
-          );
-          editor.view.dispatch(tr);
+          const { selection } = editor.state;
+          const alreadySelected =
+            selection instanceof NodeSelection && selection.from === pos;
+
+          if (alreadySelected) {
+            editor.view.dom.dispatchEvent(
+              new CustomEvent('richTextImageClick', { bubbles: true })
+            );
+          } else {
+            const tr = editor.state.tr.setSelection(
+              NodeSelection.create(editor.state.doc, pos)
+            );
+            editor.view.dispatch(tr);
+          }
         }
       });
 
@@ -707,6 +717,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
   }, [value, fields, allFields, editor, withFormatting]);
 
   // Auto-open image popover when an image node is selected
+  const imagePopoverOpenRef = useRef(imagePopoverOpen);
+  imagePopoverOpenRef.current = imagePopoverOpen;
+
   useEffect(() => {
     if (!editor || !withFormatting) return;
 
@@ -714,16 +727,24 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
       const { selection } = editor.state;
       const node = editor.state.doc.nodeAt(selection.from);
       const isImage = node?.type.name === 'richTextImage';
-      if (isImage && !imagePopoverOpen) {
+      if (isImage) {
         setImagePopoverOpen(true);
-      } else if (!isImage && imagePopoverOpen) {
+      } else if (imagePopoverOpenRef.current) {
         setImagePopoverOpen(false);
       }
     };
 
+    const handleImageClick = () => {
+      setImagePopoverOpen(true);
+    };
+
     editor.on('selectionUpdate', handleSelectionUpdate);
-    return () => { editor.off('selectionUpdate', handleSelectionUpdate); };
-  }, [editor, withFormatting, imagePopoverOpen]);
+    editor.view.dom.addEventListener('richTextImageClick', handleImageClick);
+    return () => {
+      editor.off('selectionUpdate', handleSelectionUpdate);
+      editor.view.dom.removeEventListener('richTextImageClick', handleImageClick);
+    };
+  }, [editor, withFormatting]);
 
   // Internal function to add a field variable
   const addFieldVariableInternal = useCallback((variableData: FieldVariable) => {
