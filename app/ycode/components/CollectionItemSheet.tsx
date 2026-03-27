@@ -174,7 +174,13 @@ export default function CollectionItemSheet({
         // Keep the current editingItem if it exists
         return;
       }
-      setEditingItem(item || null);
+      setEditingItem(prev => {
+        if (!item) return null;
+        if (prev && prev.id === item.id && JSON.stringify(prev.values) === JSON.stringify(item.values)) {
+          return prev;
+        }
+        return item;
+      });
     } else if (!itemId) {
       setEditingItem(null);
     }

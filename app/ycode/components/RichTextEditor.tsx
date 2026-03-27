@@ -346,6 +346,8 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
   const openFileManager = useEditorStore((s) => s.openFileManager);
   // Track if update is coming from editor to prevent infinite loop
   const isInternalUpdateRef = useRef(false);
+  // Suppress onChange during programmatic updates (onCreate, setContent from value sync)
+  const isProgrammaticUpdateRef = useRef(false);
 
   // Refs to avoid stale closures in useEditor's onUpdate callback
   const valueRef = useRef(value);
@@ -479,6 +481,11 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
         return;
       }
 
+      // Skip onChange during programmatic updates (not user edits)
+      if (isProgrammaticUpdateRef.current) {
+        return;
+      }
+
       // Mark that this update is coming from the editor
       isInternalUpdateRef.current = true;
 
@@ -500,11 +507,13 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
     },
     onCreate: ({ editor }) => {
       // Reset editor state to clear history so initial content isn't undoable
+      isProgrammaticUpdateRef.current = true;
       const { state } = editor;
       editor.view.updateState(EditorState.create({
         doc: state.doc,
         plugins: state.plugins,
       }));
+      isProgrammaticUpdateRef.current = false;
       // updateState may trigger onUpdate which sets isInternalUpdateRef;
       // clear it so the next external value-sync effect is not blocked
       isInternalUpdateRef.current = false;
@@ -598,7 +607,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
       } else {
         content = parseValueToContent(typeof value === 'string' ? value : '', fields, undefined, allFields);
       }
+      isProgrammaticUpdateRef.current = true;
       editor.commands.setContent(content);
+      isProgrammaticUpdateRef.current = false;
 
       // Reset internal update flag — setContent triggers onUpdate synchronously
       // which sets isInternalUpdateRef=true, but this was a programmatic update
@@ -644,7 +655,9 @@ const RichTextEditor = forwardRef<RichTextEditorHandle, RichTextEditorProps>(({
       if (json.content) {
         const updatedContent = updateNodeLabels(json.content);
         if (updated) {
+          isProgrammaticUpdateRef.current = true;
           editor.commands.setContent({ ...json, content: updatedContent });
+          isProgrammaticUpdateRef.current = false;
           isInternalUpdateRef.current = false;
         }
       }
