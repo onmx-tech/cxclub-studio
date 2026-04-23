@@ -28,6 +28,26 @@ const nextConfig: NextConfig = {
     'pg-query-stream',
   ],
 
+  // Bundle the CSS files our server-side Tailwind compiler reads at runtime
+  // (lib/server/cssGenerator.ts) into the corresponding serverless functions.
+  // Next.js's static tracer can't see paths built from `process.cwd()`, so we
+  // include them explicitly to guarantee they ship with the lambda on Vercel.
+  outputFileTracingIncludes: {
+    '/ycode/api/canvas/css': [
+      './node_modules/tailwindcss/*.css',
+      './lib/server/canvas-tailwind-input.css',
+    ],
+    '/ycode/api/css/generate': [
+      './node_modules/tailwindcss/*.css',
+      './lib/server/canvas-tailwind-input.css',
+    ],
+    // MCP tools also call generateAndSaveDraftCSS via lib/mcp/tools/publishing.ts
+    '/ycode/mcp/[token]': [
+      './node_modules/tailwindcss/*.css',
+      './lib/server/canvas-tailwind-input.css',
+    ],
+  },
+
   // Turbopack configuration
   // Map unused database drivers to stub modules (we only use PostgreSQL)
   // This prevents Turbopack from trying to resolve packages that aren't installed

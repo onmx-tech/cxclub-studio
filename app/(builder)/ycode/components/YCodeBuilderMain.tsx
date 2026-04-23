@@ -396,22 +396,12 @@ export default function YCodeBuilder({ children }: YCodeBuilderProps = {} as YCo
       return;
     }
 
-    // Generate initial CSS if it doesn't exist
+    // Generate initial CSS if it doesn't exist. The server reads drafts
+    // authoritatively from the DB, so no layers need to be collected here.
     const generateInitialCSS = async () => {
       try {
         const { generateAndSaveCSS } = await import('@/lib/client/cssGenerator');
-
-        // Collect layers from ALL pages for comprehensive CSS generation
-        // Use current draftsByPageId from store at execution time
-        const currentDrafts = usePagesStore.getState().draftsByPageId;
-        const allLayers: Layer[] = [];
-        Object.values(currentDrafts).forEach(draft => {
-          if (draft.layers) {
-            allLayers.push(...draft.layers);
-          }
-        });
-
-        await generateAndSaveCSS(allLayers);
+        await generateAndSaveCSS();
       } catch (error) {
         console.error('[Editor] Failed to generate initial CSS:', error);
       }

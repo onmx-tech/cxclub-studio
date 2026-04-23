@@ -485,20 +485,12 @@ export const usePagesStore = create<PagesStore>((set, get) => ({
           // The new state will trigger another auto-save which will record its own version
         }
 
-        // After successfully saving the draft, generate and save CSS from ALL pages
+        // After successfully saving the draft, trigger server-side CSS
+        // regeneration. The server pulls drafts from the DB, so we don't
+        // need to collect layers here.
         try {
           const { generateAndSaveCSS } = await import('@/lib/client/cssGenerator');
-
-          // Collect layers from ALL pages for comprehensive CSS generation
-          const allLayers: Layer[] = [];
-          const allDrafts = get().draftsByPageId;
-          Object.values(allDrafts).forEach((pageDraft) => {
-            if (pageDraft.layers) {
-              allLayers.push(...pageDraft.layers);
-            }
-          });
-
-          await generateAndSaveCSS(allLayers);
+          await generateAndSaveCSS();
         } catch (cssError) {
           console.error('Failed to generate CSS after save:', cssError);
           // Don't fail the save operation if CSS generation fails

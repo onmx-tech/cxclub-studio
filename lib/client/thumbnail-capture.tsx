@@ -18,6 +18,7 @@ import { getCanvasIframeHtml } from '@/lib/canvas-utils';
 import { componentsApi } from '@/lib/api';
 import { serializeLayers } from '@/lib/layer-utils';
 import { DEFAULT_ASSETS } from '@/lib/asset-constants';
+import { extractCanvasCandidates } from '@/lib/canvas-class-extractor';
 import type { Layer, Component } from '@/types';
 
 /** Default placeholder image for failed CORS fetches (base64 data URI) */
@@ -26,8 +27,26 @@ const DEFAULT_IMAGE_PLACEHOLDER = DEFAULT_ASSETS.IMAGE;
 /** Viewport width for the thumbnail render */
 const THUMBNAIL_VIEWPORT_WIDTH = 1280;
 
-/** Time to wait for Tailwind CDN to process styles (ms) */
-const TAILWIND_INIT_DELAY = 1500;
+/** Time to wait for React to render + layout before capture (ms) */
+const RENDER_SETTLE_DELAY = 100;
+
+/**
+ * Fetch compiled Tailwind CSS for the given classes from the server
+ * (replaces the old browser CDN JIT used for thumbnails).
+ */
+async function fetchCanvasCss(classes: string[]): Promise<string> {
+  const response = await fetch('/ycode/api/canvas/css', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ classes }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`canvas css endpoint returned ${response.status}`);
+  }
+
+  return response.text();
+}
 
 /** Track in-progress generations to prevent duplicates */
 const pendingGenerations = new Set<string>();
@@ -42,6 +61,11 @@ async function captureLayersAsBlob(
 ): Promise<Blob | null> {
   // Resolve component instances
   const { layers: resolvedLayers } = serializeLayers(layers, components);
+
+  // Pre-compile the Tailwind CSS the thumbnail needs, so html-to-image sees a
+  // fully-styled DOM the moment we mount.
+  const candidates = extractCanvasCandidates(resolvedLayers);
+  const css = await fetchCanvasCss(candidates);
 
   // Create hidden offscreen iframe
   const iframe = document.createElement('iframe');
@@ -66,8 +90,17 @@ async function captureLayersAsBlob(
     doc.write(getCanvasIframeHtml('thumbnail-mount'));
     doc.close();
 
-    // Wait for Tailwind CDN to initialize
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Inject the precompiled Tailwind CSS directly as inline <style> so the
+    // styles are synchronously available — no Blob URL loading race.
+    const styleEl = doc.createElement('style');
+    styleEl.id = 'ycode-tw-inline';
+    styleEl.textContent = css;
+    doc.head.appendChild(styleEl);
+
+    // The shared iframe shell hides the body via `data-tw-pending` until the
+    // canvas hook loads <link id="ycode-tw-css">. For thumbnails we just
+    // injected the stylesheet inline, so reveal the body ourselves.
+    doc.body?.removeAttribute('data-tw-pending');
 
     const mountPoint = doc.getElementById('thumbnail-mount');
     if (!mountPoint) throw new Error('Mount point not found');
@@ -96,8 +129,9 @@ async function captureLayersAsBlob(
       </div>
     );
 
-    // Wait for React to render + Tailwind to process all classes
-    await new Promise((resolve) => setTimeout(resolve, TAILWIND_INIT_DELAY));
+    // Let React commit + layout settle before capturing. Tailwind CSS was
+    // already injected synchronously above, so there's no JIT to wait for.
+    await new Promise((resolve) => setTimeout(resolve, RENDER_SETTLE_DELAY));
 
     // Force eager loading — the offscreen iframe won't trigger lazy images
     doc.querySelectorAll('img[loading="lazy"]').forEach((img) => {

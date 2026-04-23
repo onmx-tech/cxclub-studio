@@ -567,21 +567,12 @@ export const useComponentsStore = create<ComponentsStore>((set, get) => {
           triggerThumbnailGeneration(componentId, draftLayers, get().components);
         }
 
-        // Regenerate CSS to include updated component classes
+        // Regenerate CSS so updated component classes make it into the draft
+        // stylesheet. The server reads drafts from the DB, so no client-side
+        // layer collection is needed.
         try {
           const { generateAndSaveCSS } = await import('@/lib/client/cssGenerator');
-          const { usePagesStore } = await import('./usePagesStore');
-
-          // Collect layers from ALL pages
-          const allLayers: Layer[] = [];
-          const allDrafts = usePagesStore.getState().draftsByPageId;
-          Object.values(allDrafts).forEach((pageDraft) => {
-            if (pageDraft.layers) {
-              allLayers.push(...pageDraft.layers);
-            }
-          });
-
-          await generateAndSaveCSS(allLayers);
+          await generateAndSaveCSS();
         } catch (cssError) {
           console.error('Failed to generate CSS after component save:', cssError);
           // Don't fail the save operation if CSS generation fails

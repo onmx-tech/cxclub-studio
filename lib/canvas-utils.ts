@@ -124,8 +124,14 @@ export function measureContentExtent(doc: Document): number {
 }
 
 /**
- * Shared HTML template for canvas-style iframes with Tailwind Browser CDN.
- * Used by both the editor Canvas and the thumbnail capture hook.
+ * Shared HTML template for canvas-style iframes.
+ *
+ * Tailwind utilities are compiled on the server and loaded via a single
+ * `<link id="ycode-tw-css">` whose href is populated at runtime
+ * (see hooks/use-canvas-tailwind-css.ts). This replaces the previous
+ * Tailwind browser CDN JIT, matching how legacy Ycode served a precompiled
+ * stylesheet into the canvas iframe.
+ *
  * @param mountId - The ID of the mount point div (default: 'canvas-mount')
  */
 export function getCanvasIframeHtml(mountId: string = 'canvas-mount'): string {
@@ -134,21 +140,18 @@ export function getCanvasIframeHtml(mountId: string = 'canvas-mount'): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-  <style type="text/tailwindcss">
-    @custom-variant current (&[aria-current]);
-    @custom-variant disabled (&:is(:disabled, [aria-disabled]));
-    @theme {
-      /* Editor UI colors for context menus portaled into the iframe */
-      --color-popover: oklch(0.269 0 0);
-      --color-popover-foreground: oklch(0.708 0 0);
-      --color-accent: oklch(0.32 0 0);
-      --color-accent-foreground: oklch(0.985 0 0);
-      --color-muted-foreground: oklch(0.708 0 0);
-      --color-foreground: oklch(0.985 0 0);
-      --color-border: oklch(1 0 0 / 5%);
-      --color-destructive: oklch(0.704 0.191 22.216);
-    }
+  <style id="ycode-canvas-bootstrap">
+    /* Keep the body hidden until the compiled Tailwind stylesheet is in, so
+       the user never sees a flash of unstyled layers. Cleared by
+       hooks/use-canvas-tailwind-css.ts once <link id="ycode-tw-css"> loads. */
+    body[data-tw-pending] { visibility: hidden; }
+  </style>
+  <link id="ycode-tw-css" rel="stylesheet">
+  <style id="ycode-tw-live">
+    /* Short-lived overlay for arbitrary-value utilities compiled in the
+       browser by hooks/use-canvas-tailwind-css.ts + lib/client/
+       arbitrary-value-compiler.ts, so color pickers and sliders update on
+       the next frame without waiting for the server-compiled stylesheet. */
   </style>
   <style id="ycode-fonts-style">
     /* Font CSS (Google @import + custom @font-face) injected dynamically */
@@ -167,7 +170,7 @@ export function getCanvasIframeHtml(mountId: string = 'canvas-mount'): string {
     /* Dynamically populated: overrides vh/svh/dvh/lvh with fixed px values */
   </style>
 </head>
-<body class="h-full">
+<body class="h-full" data-tw-pending>
   <div id="${mountId}" class="contents"></div>
 </body>
 </html>`;

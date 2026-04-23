@@ -18,6 +18,7 @@ export async function POST() {
       data: {
         message: 'CSS generated and saved to draft_css',
         length: css.length,
+        css,
       },
     });
   } catch (error) {

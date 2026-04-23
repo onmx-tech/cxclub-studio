@@ -3,13 +3,16 @@
 /**
  * Canvas Component
  *
- * Renders the layer editor canvas using an embedded iframe with Tailwind Browser CDN.
- * The iframe provides complete style isolation while allowing React-based layer rendering.
+ * Renders the layer editor canvas inside an embedded iframe for full style
+ * isolation. Tailwind utilities are compiled on the server and swapped in via
+ * a single `<link>` tag managed by `useCanvasTailwindCss`; we do not run the
+ * Tailwind browser CDN JIT inside the iframe.
  *
  * Architecture:
- * - An iframe is created with Tailwind Browser CDN loaded
- * - React components are rendered into the iframe via ReactDOM.createRoot
- * - Communication happens via direct function calls (no postMessage needed)
+ * - The iframe is created with a minimal HTML template (see canvas-utils).
+ * - React components are rendered into the iframe via ReactDOM.createRoot.
+ * - `useCanvasTailwindCss` keeps the iframe stylesheet in sync with the
+ *   classes referenced by the current draft, debounced and hash-cached.
  */
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -26,6 +29,8 @@ import { resolveReferenceFieldsSync } from '@/lib/collection-utils';
 import { useEditorStore } from '@/stores/useEditorStore';
 import { useFontsStore } from '@/stores/useFontsStore';
 import { useColorVariablesStore } from '@/stores/useColorVariablesStore';
+import { useComponentsStore } from '@/stores/useComponentsStore';
+import { useCanvasTailwindCss } from '@/hooks/use-canvas-tailwind-css';
 
 import type { Layer, Component, CollectionItemWithValues, CollectionField, Breakpoint, Asset, ComponentVariable } from '@/types';
 import type { UseLiveLayerUpdatesReturn } from '@/hooks/use-live-layer-updates';
@@ -294,13 +299,43 @@ export default function Canvas({
 
   // State
   const [iframeReady, setIframeReady] = useState(false);
+  const [iframeDoc, setIframeDoc] = useState<Document | null>(null);
   const [internalHoveredLayerId, setInternalHoveredLayerId] = useState<string | null>(null);
   const effectiveHoveredLayerId = hoveredLayerId ?? internalHoveredLayerId;
+
+  // Component layers (drafts + saved) are merged in for canvas Tailwind
+  // compilation so classes used only inside components still get CSS.
+  const componentDrafts = useComponentsStore((state) => state.componentDrafts);
+  const storedComponents = useComponentsStore((state) => state.components);
+
+  const allComponentLayers = useMemo(() => {
+    const draftIds = new Set(Object.keys(componentDrafts));
+    const collected: Layer[] = [];
+
+    for (const draftLayers of Object.values(componentDrafts)) {
+      if (draftLayers && Array.isArray(draftLayers)) {
+        collected.push(...draftLayers);
+      }
+    }
+
+    for (const component of storedComponents) {
+      if (draftIds.has(component.id)) continue;
+      if (component.layers && Array.isArray(component.layers)) {
+        collected.push(...component.layers);
+      }
+    }
+
+    return collected;
+  }, [componentDrafts, storedComponents]);
 
   // Resolve component instances in layers
   const { layers: resolvedLayers, componentMap } = useMemo(() => {
     return serializeLayers(layers, components, editingComponentVariables);
   }, [layers, components, editingComponentVariables]);
+
+  // Compile and inject Tailwind CSS for classes actually used on the canvas,
+  // replacing the old browser CDN JIT inside the iframe.
+  useCanvasTailwindCss(iframeDoc, resolvedLayers, allComponentLayers);
 
   // Enrich page collection item data with reference field dotted keys
   // so variables like "refFieldId.targetFieldId" resolve on canvas
@@ -359,7 +394,8 @@ export default function Canvas({
     onLayerHover?.(resolvedLayerId);
   }, [componentMap, editingComponentId, onLayerHover]);
 
-  // Initialize iframe with Tailwind Browser CDN (only once)
+  // Initialize iframe shell (only once). Tailwind CSS is loaded later via
+  // useCanvasTailwindCss swapping the href on <link id="ycode-tw-css">.
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe) return;
@@ -374,7 +410,7 @@ export default function Canvas({
       // Double-check we haven't already initialized
       if (rootRef.current) return;
 
-      // Write the initial HTML with Tailwind Browser CDN (shared template)
+      // Write the initial HTML shell (no Tailwind CDN)
       doc.open();
       doc.write(getCanvasIframeHtml('canvas-mount'));
       doc.close();
@@ -401,18 +437,16 @@ export default function Canvas({
       };
       doc.head.appendChild(gsapScript);
 
-      // Wait for Tailwind to initialize
-      setTimeout(() => {
-        // Final guard before creating root
-        if (rootRef.current) return;
+      // Final guard before creating root
+      if (rootRef.current) return;
 
-        const mountPoint = doc.getElementById('canvas-mount');
-        if (mountPoint) {
-          mountPointRef.current = mountPoint as HTMLDivElement;
-          rootRef.current = createRoot(mountPoint);
-          setIframeReady(true);
-        }
-      }, 100);
+      const mountPoint = doc.getElementById('canvas-mount');
+      if (mountPoint) {
+        mountPointRef.current = mountPoint as HTMLDivElement;
+        rootRef.current = createRoot(mountPoint);
+        setIframeDoc(doc);
+        setIframeReady(true);
+      }
     };
 
     // Initialize when iframe loads
@@ -429,6 +463,7 @@ export default function Canvas({
       rootRef.current = null;
       mountPointRef.current = null;
       setIframeReady(false);
+      setIframeDoc(null);
 
       // Defer unmount to next frame to ensure we're outside React's render cycle
       if (rootToUnmount) {

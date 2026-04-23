@@ -1,0 +1,26 @@
+/*
+ * Canvas-specific Tailwind additions.
+ *
+ * Appended to `node_modules/tailwindcss/index.css` before being passed into
+ * the Tailwind v4 `compile()` API (see lib/server/cssGenerator.ts). Kept
+ * separate from the main Tailwind entry so we can iterate on editor-specific
+ * variants/theme tokens without touching vendor files.
+ *
+ * Ports the variants and `@theme` tokens that previously lived inline in the
+ * canvas iframe template (lib/canvas-utils.ts), so the compiled CSS can back
+ * the editor's context menus and portal-rendered chrome.
+ */
+
+@custom-variant current (&[aria-current]);
+@custom-variant disabled (&:is(:disabled, [aria-disabled]));
+
+@theme {
+  --color-popover: oklch(0.269 0 0);
+  --color-popover-foreground: oklch(0.708 0 0);
+  --color-accent: oklch(0.32 0 0);
+  --color-accent-foreground: oklch(0.985 0 0);
+  --color-muted-foreground: oklch(0.708 0 0);
+  --color-foreground: oklch(0.985 0 0);
+  --color-border: oklch(1 0 0 / 5%);
+  --color-destructive: oklch(0.704 0.191 22.216);
+}

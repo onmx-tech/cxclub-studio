@@ -1,113 +1,95 @@
 /**
  * Server-Side CSS Generator using Tailwind CSS Node API
  *
- * Mirrors the client-side cssGenerator but runs on the server.
- * Used by the /ycode/api/css/generate endpoint so that MCP-created
- * layers (or any API-driven changes) get their CSS generated without
- * needing the browser editor open.
+ * Compiles the Tailwind utility CSS that powers both the editor canvas and
+ * the published sites. The compiler instance is expensive to create but cheap
+ * to invoke, so we cache a single instance for the lifetime of the Node
+ * process.
+ *
+ * Consumers:
+ * - The canvas endpoint (app/(builder)/ycode/api/canvas/css/route.ts) calls
+ *   `compileCanvasCss` with the exact set of classes used by the current
+ *   draft, so the editor iframe never runs Tailwind JIT in the browser.
+ * - The publish pipeline calls `generateAndSaveDraftCSS` to regenerate the
+ *   `draft_css` setting whenever layers change outside the browser editor
+ *   (MCP tools, API-driven changes, etc.).
  */
 
 import { readFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { compile } from 'tailwindcss';
 import type { Layer, Component } from '@/types';
-import { DEFAULT_TEXT_STYLES } from '@/lib/text-format-utils';
+import { extractClassesFromLayers, CANVAS_SAFELIST_CLASSES } from '@/lib/canvas-class-extractor';
 import { getAllDraftLayers } from '@/lib/repositories/pageLayersRepository';
 import { getAllComponents } from '@/lib/repositories/componentRepository';
 import { setSetting } from '@/lib/repositories/settingsRepository';
 
-/**
- * Extract all Tailwind classes from a layer tree.
- * Replicates the client-side extractClassesFromLayers logic.
- */
-function extractClassesFromLayers(layers: Layer[]): Set<string> {
-  const classes = new Set<string>();
-  const processedComponentIds = new Set<string>();
-
-  const extractClasses = (classValue: string | string[] | undefined) => {
-    if (!classValue) return;
-
-    if (Array.isArray(classValue)) {
-      classValue.forEach(cls => {
-        if (cls && typeof cls === 'string') {
-          cls.split(/\s+/).forEach(c => c.trim() && classes.add(c.trim()));
-        }
-      });
-    } else if (typeof classValue === 'string') {
-      classValue.split(/\s+/).forEach(cls => cls.trim() && classes.add(cls.trim()));
-    }
-  };
-
-  function processLayer(layer: Layer): void {
-    if (layer.settings?.hidden) return;
-
-    if (layer.componentId) {
-      if (processedComponentIds.has(layer.componentId)) return;
-      processedComponentIds.add(layer.componentId);
-    }
-
-    extractClasses(layer.classes);
-
-    if (layer.textStyles) {
-      Object.values(layer.textStyles).forEach((style: { classes?: string | string[] }) => {
-        extractClasses(style.classes);
-      });
-    }
-
-    if (layer.variables?.text) {
-      Object.values(DEFAULT_TEXT_STYLES).forEach(style => {
-        extractClasses(style.classes);
-      });
-    }
-
-    if (layer.children && Array.isArray(layer.children)) {
-      layer.children.forEach(child => processLayer(child));
-    }
-  }
-
-  layers.forEach(layer => processLayer(layer));
-  return classes;
-}
-
 let compilerCache: { build: (candidates: string[]) => string } | null = null;
+let compilerPromise: Promise<{ build: (candidates: string[]) => string }> | null = null;
 
 /**
- * Get or create a cached Tailwind compiler instance.
- * The compiler only needs to be created once since we always
- * use the same Tailwind config (the default).
+ * Get or create a cached Tailwind compiler instance. The compiler is reused
+ * for every subsequent `compileCanvasCss` / `generateAndSaveDraftCSS` call.
+ *
+ * The input stylesheet is Tailwind's own `index.css` concatenated with
+ * `canvas-tailwind-input.css`, which adds the editor's custom variants and
+ * `@theme` tokens on top of Tailwind's defaults.
  */
-async function getCompiler() {
+async function getCompiler(): Promise<{ build: (candidates: string[]) => string }> {
   if (compilerCache) return compilerCache;
 
-  const twPath = join(process.cwd(), 'node_modules/tailwindcss/index.css');
-  const input = await readFile(twPath, 'utf-8');
+  if (!compilerPromise) {
+    compilerPromise = (async () => {
+      const twPath = join(process.cwd(), 'node_modules/tailwindcss/index.css');
+      const canvasInputPath = join(process.cwd(), 'lib/server/canvas-tailwind-input.css');
 
-  compilerCache = await compile(input, {
-    base: process.cwd(),
-    async loadStylesheet(id: string, base: string) {
-      const fullPath = join(dirname(base), id);
-      const content = await readFile(fullPath, 'utf-8');
-      return { path: fullPath, content, base: dirname(fullPath) };
-    },
-  });
+      const [tailwindCss, canvasAdditions] = await Promise.all([
+        readFile(twPath, 'utf-8'),
+        readFile(canvasInputPath, 'utf-8'),
+      ]);
 
-  return compilerCache;
+      const input = `${tailwindCss}\n${canvasAdditions}`;
+
+      const compiler = await compile(input, {
+        base: process.cwd(),
+        async loadStylesheet(id: string, base: string) {
+          const fullPath = join(dirname(base), id);
+          const content = await readFile(fullPath, 'utf-8');
+          return { path: fullPath, content, base: dirname(fullPath) };
+        },
+      });
+
+      compilerCache = compiler;
+      return compiler;
+    })().catch((error) => {
+      // Reset so the next caller can retry instead of getting a rejected promise forever
+      compilerPromise = null;
+      throw error;
+    });
+  }
+
+  return compilerPromise;
 }
 
 /**
- * Generate CSS from an array of Tailwind class names.
+ * Compile a CSS bundle for the given Tailwind candidate classes.
+ *
+ * Always includes the editor's safelist so context menus and other chrome
+ * portaled into the canvas iframe continue to render even when no user layer
+ * references those utilities.
  */
-async function compileCss(classNames: string[]): Promise<string> {
-  if (classNames.length === 0) return '/* No classes to generate */';
+export async function compileCanvasCss(classNames: string[]): Promise<string> {
   const compiler = await getCompiler();
-  return compiler.build(classNames);
+  const candidates = new Set<string>(classNames);
+  for (const safelisted of CANVAS_SAFELIST_CLASSES) {
+    candidates.add(safelisted);
+  }
+  return compiler.build(Array.from(candidates));
 }
 
 /**
  * Generate CSS from all draft layers and component layers,
  * then save it to the draft_css setting.
- *
- * This is the server-side equivalent of the client's generateAndSaveCSS.
  */
 export async function generateAndSaveDraftCSS(): Promise<string> {
   const allLayers: Layer[] = [];
@@ -127,8 +109,7 @@ export async function generateAndSaveDraftCSS(): Promise<string> {
   }
 
   const classes = extractClassesFromLayers(allLayers);
-  const classNames = Array.from(classes);
-  const css = await compileCss(classNames);
+  const css = await compileCanvasCss(Array.from(classes));
 
   await setSetting('draft_css', css);
 
