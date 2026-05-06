@@ -55,7 +55,6 @@ export default function TranslationRow({
   onLocalValueClear,
   getTranslationByKey,
   createTranslation,
-  updateTranslation,
   updateTranslationValue,
   updateTranslationStatus,
   deleteTranslation,
@@ -68,7 +67,7 @@ export default function TranslationRow({
 }: TranslationRowProps) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSavingStatus, setIsSavingStatus] = useState(false);
+  
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false);
   const [isRichTextSheetOpen, setIsRichTextSheetOpen] = useState(false);
   const richTextValueRef = useRef<string | null>(null);
@@ -567,7 +566,7 @@ export default function TranslationRow({
             className={`flex items-center justify-center pl-2 pr-2.5 py-0.75 gap-1.25 rounded-sm transition-colors cursor-pointer ${translation?.is_completed === true ? 'bg-green-400/6' : 'bg-secondary/50'} disabled:opacity-50 disabled:cursor-not-allowed`}
             title={isUpdatingCompletion ? 'Updating...' : (translation?.is_completed === true ? 'Mark as not completed' : 'Mark as completed')}
           >
-            {isSavingStatus ? (
+            {isUpdatingCompletion ? (
               <Spinner className="size-3 text-muted-foreground/50" />
             ) : translation?.is_completed === true ? (
               <Icon name="check" className="size-3 text-green-600 dark:text-green-400" />

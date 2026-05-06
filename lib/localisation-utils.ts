@@ -252,7 +252,7 @@ export function isLocaleRtl(locale: LocaleOption): boolean {
  */
 export interface TranslatableItem {
   key: string; // Unique identifier for the item (same key for all locales)
-  source_type: 'page' | 'folder' | 'component' | 'cms'; // Source type (page, foler, component, cms)
+  source_type: 'page' | 'folder' | 'component' | 'cms'; // Source type (page, folder, component, cms)
   source_id: string; // Source ID (e.g., page ID, folder ID, component ID, collection item ID)
   content_key: string; // Source key (e.g., 'layer:{layerId}:text', 'seo:title', 'slug')
   content_type: 'text' | 'richtext' | 'asset_id'; // Content type (text, richtext, asset)
@@ -310,7 +310,7 @@ function classifyLayerTextForTranslation(
   if (textVariable.type === 'dynamic_text') {
     const text = textVariable.data.content;
     if (!text || typeof text !== 'string' || !text.trim()) return null;
-    if (looksLikeFormattedHtml(text)) {
+    if (looksLikeFormattedHtml(text) || text.includes('<ycode-inline-variable>')) {
       return { contentType: 'richtext', value: text.trim(), openInSheet: true };
     }
     return { contentType: 'text', value: text.trim(), openInSheet: false };
@@ -923,17 +923,6 @@ export function injectTranslatedText(
       if (audioSrcTranslation && audioSrcTranslation.content_value) {
         (variableUpdates as any).audio = {
           src: createAssetVariable(audioSrcTranslation.content_value),
-        };
-      }
-    }
-
-    if (layer.name === 'icon') {
-      const iconSrcKey = buildLayerTranslationKey(pageId, `layer:${translationLayerId}:icon_src`, masterComponentId);
-      const iconSrcTranslation = getTranslationByKey(translations, iconSrcKey);
-
-      if (iconSrcTranslation && iconSrcTranslation.content_value) {
-        (variableUpdates as any).icon = {
-          src: createAssetVariable(iconSrcTranslation.content_value),
         };
       }
     }
