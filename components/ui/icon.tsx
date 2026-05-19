@@ -18,6 +18,7 @@ export interface IconProps extends React.SVGProps<SVGSVGElement> {
     | 'paragraph' | 'droplet' | 'expand' | 'collapse' | 'filter' | 'crosshair' | 'lightbox' | 'slider' | 'slide' | 'slides' | 'slide-button-prev' | 'slide-button-next'
     | 'slide-bullets' | 'slide-bullet' | 'slide-navigation' | 'slide-fraction' | 'loop-alternate' | 'loop-repeat' | 'listItem' | 'external-link'
     | 'settings' | 'center-block' | 'code-block' | 'table' | 'table-row' | 'table-cell' | 'add-column' | 'add-row' | 'delete-column' | 'delete-row' | 'delete-table' | 'header' | 'body'
+    | 'percent'
   );
 }
 
@@ -877,9 +878,13 @@ const ICONS: Record<IconProps['name'], React.ReactNode> = {
     </>
   ),
   swatch: (
-    <>
-      <path d="M6.6443 3.1065L9.1139 1.1857C9.313 1.0309 9.5961 1.0485 9.7744 1.2268L11.2715 2.7239C11.4498 2.9022 11.4675 3.1854 11.3127 3.3845L9.3924 5.8534C9.5389 6.4476 9.5418 7.0861 9.3722 7.719C8.9232 9.3949 7.4071 10.4993 5.7508 10.4993C4 10.4993 1.75 9.7484 0.5 8.9984C2.4899 7.4984 2.0236 6.5933 2.25 5.7484C2.7792 3.7733 4.6711 2.6197 6.6443 3.1065ZM8.3508 4.0458C8.3836 4.0775 8.416 4.1098 8.4476 4.1427L9.0149 4.7099L10.2523 3.1189L9.3795 2.2461L7.7885 3.4835L8.3508 4.0458Z" />
-    </>
+    <g
+      transform="scale(0.5)" fill="none"
+      stroke="currentColor" strokeWidth="1.5"
+      strokeLinecap="round" strokeLinejoin="round"
+    >
+      <path d="M4.098 19.902a3.75 3.75 0 0 0 5.304 0l6.401-6.402M6.75 21A3.75 3.75 0 0 1 3 17.25V4.125C3 3.504 3.504 3 4.125 3h5.25c.621 0 1.125.504 1.125 1.125v4.072M6.75 21a3.75 3.75 0 0 0 3.75-3.75V8.197M6.75 21h13.125c.621 0 1.125-.504 1.125-1.125v-5.25c0-.621-.504-1.125-1.125-1.125h-4.072M10.5 8.197l2.88-2.88c.438-.439 1.15-.439 1.59 0l3.712 3.713c.44.44.44 1.152 0 1.59l-2.879 2.88M6.75 17.25h.008v.008H6.75v-.008Z" />
+    </g>
   ),
   cube: (
     <>
@@ -1034,6 +1039,26 @@ const ICONS: Record<IconProps['name'], React.ReactNode> = {
   ),
   settings: (
     <path d="M3.0854 9C3.2913 8.4174 3.8469 8 4.5 8C5.1531 8 5.7087 8.4174 5.9147 9H11V10H5.9147C5.7087 10.5826 5.1531 11 4.5 11C3.8469 11 3.2913 10.5826 3.0854 10H1V9H3.0854ZM6.0854 5.5C6.2913 4.9174 6.8469 4.5 7.5 4.5C8.1531 4.5 8.7087 4.9174 8.9147 5.5H11V6.5H8.9147C8.7087 7.0826 8.1531 7.5 7.5 7.5C6.8469 7.5 6.2913 7.0826 6.0854 6.5H1V5.5H6.0854ZM3.0854 2C3.2913 1.4174 3.8469 1 4.5 1C5.1531 1 5.7087 1.4174 5.9147 2H11V3H5.9147C5.7087 3.5826 5.1531 4 4.5 4C3.8469 4 3.2913 3.5826 3.0854 3H1V2H3.0854Z" />
+  ),
+  percent: (
+    <g
+      fill="none" stroke="currentColor"
+      strokeWidth="1.5" strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line
+        x1="9.5" y1="2.5"
+        x2="2.5" y2="9.5"
+      />
+      <circle
+        cx="3.5" cy="3.5"
+        r="1.25"
+      />
+      <circle
+        cx="8.5" cy="8.5"
+        r="1.25"
+      />
+    </g>
   ),
 };
 

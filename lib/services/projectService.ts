@@ -40,6 +40,12 @@ export const CONTENT_TABLES = [
   'app_settings',
   'form_submissions',
   'color_variables',
+  // Typed CSS variables system (parents before children for FK-safe inserts)
+  'css_variable_sets',
+  'css_variable_set_modes',
+  'css_variable_groups',
+  'css_variables',
+  'css_variable_values',
 ];
 
 /**
@@ -47,6 +53,12 @@ export const CONTENT_TABLES = [
  */
 export const TABLES_TO_TRUNCATE = [
   'color_variables',
+  // Typed CSS variables (children first)
+  'css_variable_values',
+  'css_variables',
+  'css_variable_groups',
+  'css_variable_set_modes',
+  'css_variable_sets',
   'webhook_deliveries',
   'form_submissions',
   'translations',

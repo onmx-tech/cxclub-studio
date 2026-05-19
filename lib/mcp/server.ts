@@ -18,6 +18,7 @@ import { registerAssetTools } from '@/lib/mcp/tools/assets';
 import { registerAssetFolderTools } from '@/lib/mcp/tools/asset-folders';
 import { registerComponentTools } from '@/lib/mcp/tools/components';
 import { registerColorVariableTools } from '@/lib/mcp/tools/color-variables';
+import { registerCssVariableTools } from '@/lib/mcp/tools/css-variables';
 import { registerFontTools } from '@/lib/mcp/tools/fonts';
 import { registerLocaleTools } from '@/lib/mcp/tools/locales';
 import { registerFormTools } from '@/lib/mcp/tools/forms';
@@ -43,6 +44,7 @@ export function createMcpServer(): McpServer {
   registerAssetFolderTools(server);
   registerComponentTools(server);
   registerColorVariableTools(server);
+  registerCssVariableTools(server);
   registerFontTools(server);
   registerLocaleTools(server);
   registerFormTools(server);

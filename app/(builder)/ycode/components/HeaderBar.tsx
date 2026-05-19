@@ -88,6 +88,7 @@ export default function HeaderBar({
   const isPreviewMode = useEditorStore((s) => s.isPreviewMode);
   const setPreviewMode = useEditorStore((s) => s.setPreviewMode);
   const openFileManager = useEditorStore((s) => s.openFileManager);
+  const openCssVariablesEditor = useEditorStore((s) => s.openCssVariablesEditor);
   const setKeyboardShortcutsOpen = useEditorStore((s) => s.setKeyboardShortcutsOpen);
   const setActiveSidebarTab = useEditorStore((s) => s.setActiveSidebarTab);
   const lastDesignUrl = useEditorStore((s) => s.lastDesignUrl);
@@ -392,6 +393,12 @@ export default function HeaderBar({
               onClick={() => openFileManager()}
             >
               File manager
+            </DropdownMenuItem>
+
+            <DropdownMenuItem
+              onClick={() => openCssVariablesEditor()}
+            >
+              Variables
             </DropdownMenuItem>
 
             <DropdownMenuItem

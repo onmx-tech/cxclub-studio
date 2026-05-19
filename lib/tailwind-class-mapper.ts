@@ -173,6 +173,13 @@ function formatMeasurementClass(
     return `${prefix}-${value}`;
   }
 
+  // CSS variable reference (e.g. var(--<uuid>)). Tailwind needs an explicit
+  // value-type hint inside arbitrary values so a bare var() reference is not
+  // ambiguous with a color. We default to "length:" for measurements.
+  if (/^var\(--/.test(value)) {
+    return `${prefix}-[length:${value}]`;
+  }
+
   // Check if value already ends with px - don't add it again
   if (value.endsWith('px')) {
     return `${prefix}-[${value}]`;
@@ -197,6 +204,30 @@ function formatMeasurementClass(
 
   // Otherwise use as named class (e.g., "large", "small")
   return `${prefix}-${value}`;
+}
+
+/**
+ * Wrap a CSS variable reference (`var(--<id>)`) into a Tailwind arbitrary
+ * value with the appropriate value-type hint. Used by the inspector pickers
+ * when binding a CSS variable to a design property.
+ *
+ * For example, picking the variable `--abc` as a size for padding-top emits
+ * `pt-[length:var(--abc)]`, which Tailwind 4 unambiguously interprets as a
+ * length value (not a color or a number).
+ */
+export function formatCssVariableReferenceClass(
+  prefix: string,
+  cssVariableRef: string,
+  type: 'color' | 'length' | 'percentage' | 'number' | 'family-name'
+): string {
+  if (type === 'color') {
+    // Colors historically use the "color:" hint inside arbitrary values only
+    // for text-* classes; for most other prefixes the bracket value works
+    // as-is. We pick the broader form for safety so it round-trips in
+    // inspectors that scan for "color:var(".
+    return `${prefix}-[color:${cssVariableRef}]`;
+  }
+  return `${prefix}-[${type}:${cssVariableRef}]`;
 }
 
 /**
@@ -622,6 +653,9 @@ export function propertyToClass(
       case 'fontFamily':
         // Built-in fonts: sans, serif, mono → font-sans, font-serif, font-mono
         if (['sans', 'serif', 'mono'].includes(value)) return `font-${value}`;
+        // CSS variable reference — emit with `family-name:` hint so Tailwind
+        // doesn't interpret it as a font-weight number.
+        if (/^var\(--/.test(value)) return `font-[family-name:${value}]`;
         // Google/custom fonts: replace spaces with underscores for Tailwind arbitrary values
         return `font-[${value.replace(/\s+/g, '_')}]`;
       case 'lineHeight':

@@ -1,13 +1,21 @@
 /**
- * Color Variable Repository
+ * Color Variable Repository (legacy façade)
  *
- * Data access layer for color variable operations with Supabase.
- * Color variables are site-wide design tokens stored as CSS custom properties.
+ * Maintained for backwards compatibility with callers (MCP tools, animation
+ * resolver, color picker) that still reason about a flat list of color
+ * variables. All operations are forwarded to the typed CSS variables system.
+ *
+ * Color variables live in a single "Colors" set with a single "Default" mode
+ * (per tenant). When the legacy create endpoint is called without an existing
+ * Colors set, one is provisioned on demand.
+ *
+ * Prefer {@link ./cssVariableRepository} for new code.
  */
 
 import { getSupabaseAdmin } from '@/lib/supabase-server';
 import { generateContentHash } from '@/lib/hash-utils';
-import type { ColorVariable } from '@/types';
+import { generateCssVariablesStylesheet } from '@/lib/repositories/cssVariableStylesheetGenerator';
+import type { ColorVariable, CssVariableSet, CssVariableSetMode } from '@/types';
 
 export interface CreateColorVariableData {
   name: string;
@@ -19,172 +27,227 @@ export interface UpdateColorVariableData {
   value?: string;
 }
 
-/**
- * Convert a stored color value (#hex or #hex/opacity) to a CSS-ready value.
- */
-function toCssValue(val: string): string {
-  const parts = val.split('/');
-  if (parts.length < 2) return val;
-  const hex = parts[0];
-  const opacity = parseInt(parts[1]) / 100;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r},${g},${b},${opacity})`;
+async function getClient(tenantId?: string) {
+  const client = await getSupabaseAdmin(tenantId);
+  if (!client) throw new Error('Supabase not configured');
+  return client;
 }
 
 /**
- * Generate a `:root { ... }` CSS string with all color variable declarations.
- * Returns null if no variables exist.
+ * Generate a stylesheet covering every CSS variable (not just colors).
+ * Kept for callers like `fetchGlobalPageSettings` that still use this name.
  */
-export async function generateColorVariablesCss(): Promise<string | null> {
-  try {
-    const colorVars = await getAllColorVariables();
-    if (colorVars.length === 0) return null;
-    const declarations = colorVars.map((v) => `--${v.id}: ${toCssValue(v.value)};`).join(' ');
-    return `:root { ${declarations} }`;
-  } catch {
-    return null;
-  }
+export async function generateColorVariablesCss(tenantId?: string): Promise<string | null> {
+  return generateCssVariablesStylesheet(tenantId);
 }
 
-export async function getAllColorVariables(): Promise<ColorVariable[]> {
-  const client = await getSupabaseAdmin();
-
-  if (!client) {
-    throw new Error('Supabase not configured');
-  }
-
-  const { data, error } = await client
-    .from('color_variables')
+/**
+ * Resolve the (tenant-scoped) "Colors" set + Default mode used to back the
+ * legacy flat API. Returns null when no set exists yet.
+ */
+async function getDefaultColorsLocation(
+  client: Awaited<ReturnType<typeof getClient>>
+): Promise<{ set: CssVariableSet; mode: CssVariableSetMode } | null> {
+  const { data: setRow, error: setError } = await client
+    .from('css_variable_sets')
     .select('*')
+    .eq('activation_kind', 'default')
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (setError && setError.code !== 'PGRST116') {
+    throw new Error(`Failed to read colors set: ${setError.message}`);
+  }
+  if (!setRow) return null;
+
+  const { data: modeRow, error: modeError } = await client
+    .from('css_variable_set_modes')
+    .select('*')
+    .eq('set_id', setRow.id)
+    .order('is_default', { ascending: false })
+    .order('sort_order', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (modeError && modeError.code !== 'PGRST116') {
+    throw new Error(`Failed to read colors default mode: ${modeError.message}`);
+  }
+  if (!modeRow) return null;
+
+  return { set: setRow as CssVariableSet, mode: modeRow as CssVariableSetMode };
+}
+
+async function ensureDefaultColorsLocation(
+  client: Awaited<ReturnType<typeof getClient>>
+): Promise<{ set: CssVariableSet; mode: CssVariableSetMode }> {
+  const existing = await getDefaultColorsLocation(client);
+  if (existing) return existing;
+
+  const { data: setRow, error: setError } = await client
+    .from('css_variable_sets')
+    .insert({ name: 'Colors', activation_kind: 'default', sort_order: 0 })
+    .select()
+    .single();
+  if (setError) throw new Error(`Failed to create Colors set: ${setError.message}`);
+
+  const { data: modeRow, error: modeError } = await client
+    .from('css_variable_set_modes')
+    .insert({ set_id: setRow.id, name: 'Default', is_default: true, sort_order: 0 })
+    .select()
+    .single();
+  if (modeError) throw new Error(`Failed to create Default mode: ${modeError.message}`);
+
+  return { set: setRow as CssVariableSet, mode: modeRow as CssVariableSetMode };
+}
+
+/** Get all color-typed CSS variables in legacy shape. */
+export async function getAllColorVariables(tenantId?: string): Promise<ColorVariable[]> {
+  const client = await getClient(tenantId);
+
+  const { data: variables, error } = await client
+    .from('css_variables')
+    .select('id, name, sort_order, created_at, updated_at, set_id, css_variable_values(value, mode_id)')
+    .eq('type', 'color')
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
 
-  if (error) {
-    throw new Error(`Failed to fetch color variables: ${error.message}`);
-  }
+  if (error) throw new Error(`Failed to fetch color variables: ${error.message}`);
 
-  return data || [];
+  // Map to legacy shape, picking the first value per variable (Default mode)
+  return ((variables || []) as Array<{
+    id: string;
+    name: string;
+    sort_order: number;
+    created_at: string;
+    updated_at: string;
+    css_variable_values: Array<{ value: string; mode_id: string }>;
+  }>).map((v) => ({
+    id: v.id,
+    name: v.name,
+    value: v.css_variable_values?.[0]?.value ?? '',
+    sort_order: v.sort_order,
+    created_at: v.created_at,
+    updated_at: v.updated_at,
+  }));
 }
 
-export async function getColorVariableById(id: string): Promise<ColorVariable | null> {
-  const client = await getSupabaseAdmin();
-
-  if (!client) {
-    throw new Error('Supabase not configured');
-  }
-
-  const { data, error } = await client
-    .from('color_variables')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
-    throw new Error(`Failed to fetch color variable: ${error.message}`);
-  }
-
-  return data;
+export async function getColorVariableById(id: string, tenantId?: string): Promise<ColorVariable | null> {
+  const all = await getAllColorVariables(tenantId);
+  return all.find((v) => v.id === id) ?? null;
 }
 
 export async function createColorVariable(
-  variableData: CreateColorVariableData
+  data: CreateColorVariableData,
+  tenantId?: string
 ): Promise<ColorVariable> {
-  const client = await getSupabaseAdmin();
+  const client = await getClient(tenantId);
+  const { set, mode } = await ensureDefaultColorsLocation(client);
 
-  if (!client) {
-    throw new Error('Supabase not configured');
-  }
-
-  // Get max sort_order to append at end
   const { data: maxRow } = await client
-    .from('color_variables')
+    .from('css_variables')
     .select('sort_order')
+    .eq('set_id', set.id)
     .order('sort_order', { ascending: false })
     .limit(1)
-    .single();
+    .maybeSingle();
   const nextOrder = (maxRow?.sort_order ?? -1) + 1;
 
-  const { data, error } = await client
-    .from('color_variables')
-    .insert({ ...variableData, sort_order: nextOrder })
+  const { data: variableRow, error: variableError } = await client
+    .from('css_variables')
+    .insert({ set_id: set.id, type: 'color', name: data.name, sort_order: nextOrder })
     .select()
     .single();
+  if (variableError) throw new Error(`Failed to create color variable: ${variableError.message}`);
 
-  if (error) {
-    throw new Error(`Failed to create color variable: ${error.message}`);
-  }
+  const { error: valueError } = await client
+    .from('css_variable_values')
+    .insert({ css_variable_id: variableRow.id, mode_id: mode.id, value: data.value });
+  if (valueError) throw new Error(`Failed to set color variable value: ${valueError.message}`);
 
-  return data;
+  return {
+    id: variableRow.id,
+    name: variableRow.name,
+    value: data.value,
+    sort_order: variableRow.sort_order,
+    created_at: variableRow.created_at,
+    updated_at: variableRow.updated_at,
+  };
 }
 
 export async function updateColorVariable(
   id: string,
-  updates: UpdateColorVariableData
+  updates: UpdateColorVariableData,
+  tenantId?: string
 ): Promise<ColorVariable> {
-  const client = await getSupabaseAdmin();
+  const client = await getClient(tenantId);
 
-  if (!client) {
-    throw new Error('Supabase not configured');
+  if (updates.name !== undefined) {
+    const { error } = await client
+      .from('css_variables')
+      .update({ name: updates.name, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw new Error(`Failed to update color variable: ${error.message}`);
   }
 
-  const { data, error } = await client
-    .from('color_variables')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .select()
-    .single();
+  if (updates.value !== undefined) {
+    // Find the variable's set + default mode and upsert the value there
+    const { data: variableRow, error: varError } = await client
+      .from('css_variables')
+      .select('set_id')
+      .eq('id', id)
+      .single();
+    if (varError) throw new Error(`Failed to read color variable: ${varError.message}`);
 
-  if (error) {
-    throw new Error(`Failed to update color variable: ${error.message}`);
+    const { data: modeRow, error: modeError } = await client
+      .from('css_variable_set_modes')
+      .select('id')
+      .eq('set_id', variableRow.set_id)
+      .order('is_default', { ascending: false })
+      .order('sort_order', { ascending: true })
+      .limit(1)
+      .single();
+    if (modeError) throw new Error(`Failed to read default mode: ${modeError.message}`);
+
+    const { error } = await client
+      .from('css_variable_values')
+      .upsert(
+        {
+          css_variable_id: id,
+          mode_id: modeRow.id,
+          value: updates.value,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'css_variable_id,mode_id' }
+      );
+    if (error) throw new Error(`Failed to update color variable value: ${error.message}`);
   }
 
-  return data;
+  const refreshed = await getColorVariableById(id, tenantId);
+  if (!refreshed) throw new Error('Color variable disappeared after update');
+  return refreshed;
 }
 
-export async function deleteColorVariable(id: string): Promise<void> {
-  const client = await getSupabaseAdmin();
-
-  if (!client) {
-    throw new Error('Supabase not configured');
-  }
-
-  const { error } = await client
-    .from('color_variables')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    throw new Error(`Failed to delete color variable: ${error.message}`);
-  }
+export async function deleteColorVariable(id: string, tenantId?: string): Promise<void> {
+  const client = await getClient(tenantId);
+  const { error } = await client.from('css_variables').delete().eq('id', id);
+  if (error) throw new Error(`Failed to delete color variable: ${error.message}`);
 }
 
-export async function reorderColorVariables(
-  orderedIds: string[]
-): Promise<void> {
-  const client = await getSupabaseAdmin();
+export async function reorderColorVariables(orderedIds: string[], tenantId?: string): Promise<void> {
+  if (orderedIds.length === 0) return;
+  const client = await getClient(tenantId);
 
-  if (!client) {
-    throw new Error('Supabase not configured');
-  }
-
-  // Fetch full rows so upsert includes all NOT NULL columns
   const { data: existing, error: fetchError } = await client
-    .from('color_variables')
+    .from('css_variables')
     .select('*')
     .in('id', orderedIds);
 
-  if (fetchError) {
-    throw new Error(`Failed to fetch color variables for reorder: ${fetchError.message}`);
-  }
+  if (fetchError) throw new Error(`Failed to fetch color variables for reorder: ${fetchError.message}`);
 
-  const existingMap = new Map((existing || []).map((v) => [v.id, v]));
+  const existingMap = new Map(((existing || []) as Array<{ id: string }>).map((r) => [r.id, r]));
   const now = new Date().toISOString();
-
   const updates = orderedIds
     .map((id, index) => {
       const row = existingMap.get(id);
@@ -193,24 +256,18 @@ export async function reorderColorVariables(
     })
     .filter(Boolean);
 
-  const { error } = await client
-    .from('color_variables')
-    .upsert(updates, { onConflict: 'id' });
-
-  if (error) {
-    throw new Error(`Failed to reorder color variables: ${error.message}`);
-  }
+  if (updates.length === 0) return;
+  const { error } = await client.from('css_variables').upsert(updates, { onConflict: 'id' });
+  if (error) throw new Error(`Failed to reorder color variables: ${error.message}`);
 }
 
 /**
- * Compute a deterministic hash of all color variables.
- * Used to detect changes between publishes — color variables have no
- * draft/published model so we compare the current state against a
- * stored snapshot hash.
+ * Hash of just the color-typed variables. Use {@link import('./cssVariableRepository').getCssVariablesGraphHash}
+ * when you want change detection across the full typed graph (publish flow).
  */
-export async function getColorVariablesHash(): Promise<string> {
-  const variables = await getAllColorVariables();
+export async function getColorVariablesHash(tenantId?: string): Promise<string> {
+  const variables = await getAllColorVariables(tenantId);
   return generateContentHash(
-    variables.map(v => ({ id: v.id, name: v.name, value: v.value, sort_order: v.sort_order }))
+    variables.map((v) => ({ id: v.id, name: v.name, value: v.value, sort_order: v.sort_order }))
   );
 }
