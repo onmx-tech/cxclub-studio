@@ -60,8 +60,10 @@
   min-height: 3rem;
 }
 
-/* Icon SVG styling */
-[data-icon] {
+/* Icon SVG styling — exclude `.hidden` so Tailwind's `display: none` always
+   wins for hidden icons. This author rule is unlayered and would otherwise
+   beat any layered `.hidden` utility from the Tailwind Browser CDN. */
+[data-icon]:not(.hidden) {
   display: inline-block;
 }
 
