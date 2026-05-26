@@ -165,7 +165,7 @@ const LayerRendererPublic: React.FC<LayerRendererPublicProps> = ({
 
       const originalLayerId = layer.id.replace(/-fragment$/, '');
       const hasFilter = !!layer._filterConfig;
-      const hasPagination = layer._paginationMeta && isPublished;
+      const hasPagination = !!layer._paginationMeta;
 
       if (hasPagination || hasFilter) {
         let content: React.ReactNode = renderedChildren;
@@ -180,6 +180,10 @@ const LayerRendererPublic: React.FC<LayerRendererPublicProps> = ({
                 collectionLayerId={originalLayerId}
                 itemIds={layer._paginationMeta!.itemIds}
                 layerTemplate={layer._paginationMeta!.layerTemplate}
+                isPreview={isPreview}
+                pageCollectionItemId={pageCollectionItemId}
+                pageCollectionSortedItemIds={pageCollectionSortedItemIds}
+                collectionLayer={layer._filterConfig?.collectionLayer || layer._paginationMeta!.collectionLayer}
               >
                 {content}
               </LoadMoreCollection>
@@ -212,6 +216,10 @@ const LayerRendererPublic: React.FC<LayerRendererPublicProps> = ({
               collectionLayerClasses={layer._filterConfig!.collectionLayerClasses}
               collectionLayerTag={layer._filterConfig!.collectionLayerTag}
               isPublished={layer._filterConfig!.isPublished}
+              isPreview={isPreview}
+              pageCollectionItemId={pageCollectionItemId}
+              pageCollectionSortedItemIds={pageCollectionSortedItemIds}
+              collectionLayer={layer._filterConfig!.collectionLayer}
             >
               {content}
             </FilterableCollection>

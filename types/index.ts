@@ -472,6 +472,11 @@ export interface Layer {
     collectionLayerClasses?: string[];
     collectionLayerTag?: string;
     isPublished?: boolean;
+    // Full collection layer (sans children) used by the client to rebuild
+    // proper item wrappers (anchor/link/attribute) when injecting filtered
+    // or load-more items. Without this, the wrapper would be a plain <div>
+    // and lose link/action behavior.
+    collectionLayer?: Omit<Layer, 'children'>;
   };
 }
 
@@ -1319,6 +1324,18 @@ export interface CollectionPaginationMeta {
   mode?: 'pages' | 'load_more'; // Pagination mode
   itemIds?: string[]; // For multi-reference filtering in load_more mode
   layerTemplate?: Layer[]; // Layer template for rendering new items in load_more mode
+  // Full collection layer (sans children) — used by load-more (and filter)
+  // to rebuild proper item wrappers (link/action/attributes) when items are
+  // re-rendered client-side.
+  collectionLayer?: Omit<Layer, 'children'>;
+  // Whether SSR rendered this collection from published data. The client
+  // must fetch load-more items from the same source so draft previews
+  // don't accidentally append published rows (or vice versa).
+  isPublished?: boolean;
+  // Sort applied by SSR — load-more must mirror it or offset-based
+  // paging will return overlapping (duplicate) items.
+  sortBy?: string;
+  sortOrder?: 'asc' | 'desc';
 }
 
 // Conditional Visibility Types
