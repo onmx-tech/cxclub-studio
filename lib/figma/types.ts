@@ -14,6 +14,8 @@ export interface YcodeNode {
   maxWidth?: number | null;
   minHeight?: number | null;
   maxHeight?: number | null;
+  aspectRatio?: number | null;
+  rotation?: number;
   opacity: number;
   fillEnabled: boolean;
   fillType: 'color' | 'gradient' | 'image' | 'none';
@@ -50,6 +52,7 @@ export interface YcodeNode {
   paddingRight: number;
   paddingBottom: number;
   paddingLeft: number;
+  textVerticalAlignment?: 'top' | 'center' | 'bottom';
   html?: string;
   imageData?: string;
   svgData?: string;

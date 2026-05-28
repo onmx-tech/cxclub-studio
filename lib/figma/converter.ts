@@ -356,6 +356,20 @@ async function convertNode(node: YcodeNode): Promise<Layer> {
   const effects = mapEffects(node);
   if (effects) design.effects = effects;
 
+  if (node.rotation) {
+    design.transforms = {
+      isActive: true,
+      rotate: `${node.rotation}deg`,
+    };
+  }
+
+  if (node.aspectRatio) {
+    const sizing = design.sizing || { isActive: true };
+    sizing.aspectRatio = `[${node.aspectRatio}]`;
+    sizing.isActive = true;
+    design.sizing = sizing;
+  }
+
   const layerName = getLayerName(node);
   const layer: Layer = {
     id,
@@ -368,6 +382,21 @@ async function convertNode(node: YcodeNode): Promise<Layer> {
   if (node.__class === 'TextNode' && node.html) {
     const { typography, tiptapContent } = parseHtmlToTypographyAndTipTap(node.html);
     design.typography = typography;
+
+    if (node.textVerticalAlignment === 'center') {
+      const layout = design.layout || { isActive: true };
+      layout.display = 'Flex';
+      layout.alignItems = 'center';
+      layout.isActive = true;
+      design.layout = layout;
+    } else if (node.textVerticalAlignment === 'bottom') {
+      const layout = design.layout || { isActive: true };
+      layout.display = 'Flex';
+      layout.alignItems = 'flex-end';
+      layout.isActive = true;
+      design.layout = layout;
+    }
+
     layer.variables = {
       text: {
         type: 'dynamic_rich_text',
