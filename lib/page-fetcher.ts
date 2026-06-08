@@ -2236,17 +2236,34 @@ export async function resolveCollectionLayers(
                   )
                 );
 
+                // Inject the cloned layer's OWN field variables (e.g. a slide's
+                // backgroundImage bound to the virtual __asset_url field). The
+                // React renderer resolves these at render time from
+                // _collectionItemValues, but static HTML export expects them
+                // pre-resolved — so resolve them here against this asset's values.
+                // Strip children first to avoid re-injecting the already-resolved
+                // per-asset children, then reattach them.
+                const layerWithOwnData = await injectCollectionData(
+                  {
+                    ...layer,
+                    variables: { ...layer.variables, collection: undefined },
+                    children: [],
+                  },
+                  virtualValues,
+                  undefined,
+                  isPublished,
+                  updatedLayerDataMap,
+                  undefined,
+                  timezone
+                );
+
                 // Build the cloned layer with original IDs first
                 const clonedLayer: Layer = {
-                  ...layer,
+                  ...layerWithOwnData,
                   attributes: {
                     ...layer.attributes,
                     'data-collection-item-id': assetId,
                   } as Record<string, any>,
-                  variables: {
-                    ...layer.variables,
-                    collection: undefined,
-                  },
                   children: injectedChildren,
                   _collectionItemValues: virtualValues,
                   _collectionItemId: assetId,

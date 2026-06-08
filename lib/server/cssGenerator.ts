@@ -15,6 +15,7 @@ import { join, dirname } from 'node:path';
 import { compile } from 'tailwindcss';
 import type { Layer, Component } from '@/types';
 import { DEFAULT_TEXT_STYLES } from '@/lib/text-format-utils';
+import { TAILWIND_CUSTOM_VARIANTS } from '@/lib/tailwind-custom-variants';
 import { getAllDraftLayers, getDraftLayers } from '@/lib/repositories/pageLayersRepository';
 import { getAllComponents } from '@/lib/repositories/componentRepository';
 import { setSetting } from '@/lib/repositories/settingsRepository';
@@ -85,12 +86,10 @@ async function getCompiler() {
 
   const twPath = join(process.cwd(), 'node_modules/tailwindcss/index.css');
   const baseInput = await readFile(twPath, 'utf-8');
-
-  // Register the same custom variants the client/browser generator uses so
-  // state-specific utilities compile server-side too. `current` (&[aria-current])
-  // powers the active-page navigation styling; the `disabled` override extends
-  // the built-in variant to also match `[aria-disabled]`.
-  const input = `${baseInput}\n@custom-variant current (&[aria-current]);\n@custom-variant disabled (&:is(:disabled, [aria-disabled]));\n`;
+  // Register custom variants (current:, disabled:) so user classes like
+  // `current:opacity-100` on slider bullets compile — mirrors the client
+  // generator and app/globals.css.
+  const input = `${baseInput}\n${TAILWIND_CUSTOM_VARIANTS}\n`;
 
   compilerCache = await compile(input, {
     base: process.cwd(),
