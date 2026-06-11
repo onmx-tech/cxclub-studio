@@ -628,6 +628,16 @@ export default function HeaderBar({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {canManageSettings && !pathname?.startsWith('/ycode/localization') && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => router.push('/ycode/localization')}
+                >
+                  Manage locales
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             <DropdownMenuRadioGroup
               value={selectedLocaleId || ''}
               onValueChange={(value) => {
@@ -651,16 +661,6 @@ export default function HeaderBar({
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
-            {canManageSettings && !pathname?.startsWith('/ycode/localization') && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => router.push('/ycode/localization')}
-                >
-                  Manage locales
-                </DropdownMenuItem>
-              </>
-            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
