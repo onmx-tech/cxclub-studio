@@ -138,10 +138,26 @@ function extractCollectionItemSlugs(layers: Layer[]): Record<string, string> {
 }
 
 /**
+ * The public renderer styles layers from their compiled `classes`; the structured
+ * `design` object is builder-only metadata used to regenerate those classes in the
+ * editor. The one exception is `design.backgrounds`, whose `bgImageVars` /
+ * `bgGradientVars` are applied as inline CSS custom properties at render time
+ * (see LayerRendererPublic). So for the client payload we keep only
+ * `design.backgrounds` and drop the rest — on a content-heavy page the full design
+ * tree can be ~30% of the serialized RSC Flight payload.
+ */
+function stripDesignForClient(design: Layer['design']): Layer['design'] | undefined {
+  const backgrounds = design?.backgrounds;
+  if (!backgrounds) return undefined;
+  return { backgrounds };
+}
+
+/**
  * Strip heavy SSR-only data from the layer tree before passing to client
  * components. After resolveCollectionLayers, all variables are pre-resolved
  * into the layers — _collectionItemValues and _layerDataMap are redundant
- * and can be enormous (e.g. 50 articles × full rich text bodies).
+ * and can be enormous (e.g. 50 articles × full rich text bodies). The
+ * builder-only `design` metadata is likewise dropped (see stripDesignForClient).
  *
  * The RSC Flight payload serializes everything passed to 'use client'
  * components, so stripping here avoids doubling the response size.
@@ -153,6 +169,13 @@ function stripSSROnlyData(layers: Layer[]): Layer[] {
     delete stripped._collectionItemValues;
     delete stripped._collectionItemSlug;
     delete stripped._layerDataMap;
+
+    const slimDesign = stripDesignForClient(stripped.design);
+    if (slimDesign) {
+      stripped.design = slimDesign;
+    } else {
+      delete stripped.design;
+    }
 
     if (stripped._filterConfig?.layerTemplate) {
       stripped._filterConfig = {
