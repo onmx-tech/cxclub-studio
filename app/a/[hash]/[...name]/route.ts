@@ -103,8 +103,14 @@ export async function GET(
       let pipeline = sharp(buffer);
 
       if (transform.width || transform.height) {
+        // `fit: 'inside'` scales the image down to fit within the requested
+        // bounds while preserving its aspect ratio — it never crops. This is
+        // the only correct behavior for a responsive-image proxy: cropping is a
+        // display concern handled by CSS `object-fit` on the rendered element.
+        // (Using `fit: 'cover'` here crops the sides whenever a height is
+        // present in the resize call, which silently breaks `object-cover`.)
         pipeline = pipeline.resize(transform.width, transform.height, {
-          fit: 'cover',
+          fit: 'inside',
           withoutEnlargement: true,
         });
       }

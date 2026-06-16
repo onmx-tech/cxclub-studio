@@ -557,7 +557,10 @@ export function generateImageSrcset(
       const sizeUrl = new URL(url);
       sizeUrl.searchParams.set('width', width.toString());
       sizeUrl.searchParams.set('quality', quality.toString());
-      sizeUrl.searchParams.set('resize', 'cover');
+      // `contain` preserves the source aspect ratio. `cover` would crop the
+      // image (e.g. the sides) on the transform CDN, silently breaking the
+      // element's own CSS `object-fit` — keep cropping a display-only concern.
+      sizeUrl.searchParams.set('resize', 'contain');
       return `${sizeUrl.toString()} ${width}w`;
     });
 
