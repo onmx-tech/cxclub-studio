@@ -2,7 +2,9 @@
 
 import { create } from 'zustand';
 
+import { useComponentsStore } from '@/stores/useComponentsStore';
 import { useEditorStore } from '@/stores/useEditorStore';
+import { usePagesStore } from '@/stores/usePagesStore';
 
 /** A tool the agent invoked during an assistant turn, shown as a status line. */
 export interface ChatToolCall {
@@ -23,6 +25,8 @@ export interface ChatMessage {
   text: string;
   toolCalls: ChatToolCall[];
   images?: ChatImage[];
+  /** True for the auto-generated visual self-review turn (rendered compactly). */
+  review?: boolean;
 }
 
 type ChatStatus = 'idle' | 'streaming';
@@ -32,6 +36,8 @@ interface AiChatState {
   messages: ChatMessage[];
   status: ChatStatus;
   error: string | null;
+  /** When on, the agent screenshots its work and critiques/fixes it automatically. */
+  autoReview: boolean;
 }
 
 /** A layer the user explicitly attached as context for a message. */
@@ -71,6 +77,7 @@ interface AiChatActions {
   toggle: () => void;
   clear: () => void;
   stop: () => void;
+  setAutoReview: (value: boolean) => void;
   sendMessage: (text: string, attachment?: MessageAttachment) => Promise<void>;
 }
 
@@ -86,64 +93,110 @@ type RuntimeEvent =
 
 let abortController: AbortController | null = null;
 
+/** How many automatic review passes to run after a user turn. */
+const MAX_REVIEW_DEPTH = 1;
+
+/** Instruction sent alongside the screenshot during an auto-review pass. */
+const REVIEW_PROMPT =
+  'Here is a screenshot of the current page after your changes. Critically review it against my request and good design principles — layout, spacing, alignment, contrast, overflow, readability, and visual hierarchy. If anything looks wrong or low quality, fix it with the tools. If it already looks good, just briefly confirm you are done (do not make changes for the sake of it).';
+
+const READONLY_TOOL_PREFIXES = ['get_', 'list_', 'export_', 'search_'];
+
+/** Tools that change data/settings but not the current page's visual layout. */
+const NON_VISUAL_TOOLS = new Set([
+  'publish',
+  'update_page_settings',
+  'update_page',
+  'create_page',
+  'update_form_settings',
+  'update_form_submission_status',
+  'add_redirect',
+  'update_redirect',
+  'delete_redirect',
+  'set_setting',
+  'set_translation',
+  'set_rich_text_translation',
+  'batch_set_translations',
+  'create_locale',
+]);
+
+/** Whether a tool call likely changed how the current page looks. */
+function isVisualMutation(name: string): boolean {
+  if (READONLY_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
+  if (NON_VISUAL_TOOLS.has(name)) return false;
+  return true;
+}
+
+/** Capture the current page's layers as a base64 image for the agent to review. */
+async function captureCurrentPageImage(): Promise<ImageAttachment | null> {
+  const pageId = useEditorStore.getState().currentPageId;
+  if (!pageId) return null;
+  const layers = usePagesStore.getState().draftsByPageId[pageId]?.layers;
+  if (!layers || layers.length === 0) return null;
+
+  try {
+    const { captureLayersImage } = await import('@/lib/client/thumbnail-capture');
+    const components = useComponentsStore.getState().components;
+    const shot = await captureLayersImage(layers, components);
+    if (!shot) return null;
+    return { mediaType: shot.mediaType, data: shot.data, dataUrl: shot.dataUrl };
+  } catch (error) {
+    console.error('Visual review capture failed:', error);
+    return null;
+  }
+}
+
 function newId(): string {
   return typeof crypto !== 'undefined' && 'randomUUID' in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export const useAiChatStore = create<AiChatStore>((set, get) => ({
-  isOpen: false,
-  messages: [],
-  status: 'idle',
-  error: null,
-
-  open: () => set({ isOpen: true }),
-  close: () => set({ isOpen: false }),
-  toggle: () => set((state) => ({ isOpen: !state.isOpen })),
-
-  clear: () => {
-    get().stop();
-    set({ messages: [], error: null });
-  },
-
-  stop: () => {
-    abortController?.abort();
-    abortController = null;
-    set({ status: 'idle' });
-  },
-
-  sendMessage: async (text: string, attachment?: MessageAttachment) => {
+export const useAiChatStore = create<AiChatStore>((set, get) => {
+  /**
+   * Stream a single agent turn into a new assistant message. After a turn that
+   * makes visual edits, optionally captures the page and recurses for one
+   * automatic self-review pass (bounded by MAX_REVIEW_DEPTH).
+   */
+  const runTurn = async (
+    text: string,
+    attachment: MessageAttachment | undefined,
+    reviewDepth: number,
+  ): Promise<void> => {
     const trimmed = text.trim();
     const images = attachment?.images ?? [];
-    if ((!trimmed && images.length === 0) || get().status === 'streaming') return;
+    if (!trimmed && images.length === 0) return;
 
+    const isReview = reviewDepth > 0;
     const promptText = trimmed || 'Use the attached image(s) as a reference for what to build.';
+
     const userMessage: ChatMessage = {
       id: newId(),
       role: 'user',
-      text: trimmed,
+      text: promptText,
       toolCalls: [],
       images: images.length > 0 ? images.map((img) => ({ id: newId(), dataUrl: img.dataUrl })) : undefined,
+      review: isReview || undefined,
     };
     const assistantMessage: ChatMessage = { id: newId(), role: 'assistant', text: '', toolCalls: [] };
 
-    // History to send: prior text-bearing turns plus this new user message.
-    const history = get().messages
-      .filter((message) => message.text.trim().length > 0)
-      .map((message) => ({ role: message.role, content: message.text }));
+    // History: prior turns as text. Assistant turns that only ran tools still
+    // contribute a placeholder so user/assistant roles keep alternating.
+    const history = get()
+      .messages.map((message) => ({
+        role: message.role,
+        content:
+          message.text.trim() ||
+          (message.role === 'assistant' && message.toolCalls.length > 0 ? '(made the requested edits)' : ''),
+      }))
+      .filter((message) => message.content.length > 0);
 
-    set((state) => ({
-      messages: [...state.messages, userMessage, assistantMessage],
-      status: 'streaming',
-      error: null,
-    }));
+    set((state) => ({ messages: [...state.messages, userMessage, assistantMessage], error: null }));
 
     const editor = useEditorStore.getState();
     abortController = new AbortController();
+    const signal = abortController.signal;
 
-    // The new user turn carries text plus any attached images as content blocks;
-    // prior turns are sent as plain text (history images are not re-sent).
     const userContent =
       images.length > 0
         ? [
@@ -171,27 +224,75 @@ export const useAiChatStore = create<AiChatStore>((set, get) => ({
           mentions: attachment?.mentions ?? [],
           referenceUrls: attachment?.referenceUrls ?? [],
         }),
-        signal: abortController.signal,
+        signal,
       });
 
       if (!response.ok || !response.body) {
         const message = await safeErrorMessage(response);
         patchAssistant((m) => ({ ...m, text: m.text || message }));
-        set({ error: message, status: 'idle' });
+        set({ error: message });
         return;
       }
 
       await consumeSse(response.body, (event) => applyEvent(event, patchAssistant, set));
     } catch (error) {
       if ((error as Error).name === 'AbortError') return;
-      const message = error instanceof Error ? error.message : 'Something went wrong';
-      set({ error: message });
-    } finally {
+      set({ error: error instanceof Error ? error.message : 'Something went wrong' });
+      return;
+    }
+
+    // Visual self-review: if this turn changed the page, screenshot it and let
+    // the agent critique and fix its own work (one pass).
+    if (get().autoReview && reviewDepth < MAX_REVIEW_DEPTH && !signal.aborted) {
+      const completed = get().messages.find((m) => m.id === assistantMessage.id);
+      const changedVisuals = completed?.toolCalls.some((call) => isVisualMutation(call.name)) ?? false;
+      if (changedVisuals) {
+        const shot = await captureCurrentPageImage();
+        if (shot && !signal.aborted) {
+          await runTurn(REVIEW_PROMPT, { images: [shot] }, reviewDepth + 1);
+        }
+      }
+    }
+  };
+
+  return {
+    isOpen: false,
+    messages: [],
+    status: 'idle',
+    error: null,
+    autoReview: true,
+
+    open: () => set({ isOpen: true }),
+    close: () => set({ isOpen: false }),
+    toggle: () => set((state) => ({ isOpen: !state.isOpen })),
+
+    setAutoReview: (value: boolean) => set({ autoReview: value }),
+
+    clear: () => {
+      get().stop();
+      set({ messages: [], error: null });
+    },
+
+    stop: () => {
+      abortController?.abort();
       abortController = null;
       set({ status: 'idle' });
-    }
-  },
-}));
+    },
+
+    sendMessage: async (text: string, attachment?: MessageAttachment) => {
+      const hasContent = text.trim().length > 0 || (attachment?.images?.length ?? 0) > 0;
+      if (!hasContent || get().status !== 'idle') return;
+
+      set({ status: 'streaming', error: null });
+      try {
+        await runTurn(text, attachment, 0);
+      } finally {
+        abortController = null;
+        set({ status: 'idle' });
+      }
+    },
+  };
+});
 
 function applyEvent(
   event: RuntimeEvent,

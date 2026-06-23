@@ -92,7 +92,9 @@ export default function AiChatPanel({ embedded = false }: AiChatPanelProps) {
   const messages = useAiChatStore((s) => s.messages);
   const status = useAiChatStore((s) => s.status);
   const error = useAiChatStore((s) => s.error);
+  const autoReview = useAiChatStore((s) => s.autoReview);
   const sendMessage = useAiChatStore((s) => s.sendMessage);
+  const setAutoReview = useAiChatStore((s) => s.setAutoReview);
   const stop = useAiChatStore((s) => s.stop);
   const clear = useAiChatStore((s) => s.clear);
   const close = useAiChatStore((s) => s.close);
@@ -268,7 +270,18 @@ export default function AiChatPanel({ embedded = false }: AiChatPanelProps) {
       )}
     >
       {embedded ? (
-        <div className="flex items-center justify-end px-4 pt-3 shrink-0">
+        <div className="flex items-center justify-end gap-1 px-4 pt-3 shrink-0">
+          <Button
+            size="sm"
+            variant="ghost"
+            className={cn('size-7 p-0', autoReview ? 'text-foreground' : 'text-muted-foreground')}
+            onClick={() => setAutoReview(!autoReview)}
+            aria-pressed={autoReview}
+            aria-label="Auto visual review"
+            title={autoReview ? 'Auto visual review: on' : 'Auto visual review: off'}
+          >
+            <Icon name="eye" className="size-3.5" />
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -288,6 +301,17 @@ export default function AiChatPanel({ embedded = false }: AiChatPanelProps) {
             <span className="text-xs font-medium">AI</span>
           </div>
           <div className="flex items-center gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              className={cn('size-7 p-0', autoReview ? 'text-foreground' : 'text-muted-foreground')}
+              onClick={() => setAutoReview(!autoReview)}
+              aria-pressed={autoReview}
+              aria-label="Auto visual review"
+              title={autoReview ? 'Auto visual review: on' : 'Auto visual review: off'}
+            >
+              <Icon name="eye" className="size-3.5" />
+            </Button>
             <Button
               size="sm"
               variant="ghost"
@@ -499,6 +523,23 @@ function EmptyState({ onPick, disabled }: { onPick: (text: string) => void; disa
 }
 
 function MessageBubble({ message, isStreaming }: { message: ChatMessage; isStreaming: boolean }) {
+  if (message.role === 'user' && message.review) {
+    return (
+      <div className="self-stretch flex items-center gap-2 text-[11px] text-muted-foreground">
+        <Icon name="eye" className="size-3 shrink-0" />
+        <span>Reviewing the result…</span>
+        {message.images?.[0] && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={message.images[0].dataUrl}
+            alt="Review screenshot"
+            className="ml-auto size-8 rounded object-cover border"
+          />
+        )}
+      </div>
+    );
+  }
+
   if (message.role === 'user') {
     return (
       <div className="self-end max-w-[85%] flex flex-col items-end gap-1.5">

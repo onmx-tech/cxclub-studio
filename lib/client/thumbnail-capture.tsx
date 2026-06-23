@@ -164,6 +164,38 @@ async function captureLayersAsBlob(
   }
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('Failed to read blob'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Render layers offscreen and return them as a base64 image (no upload).
+ * Used by the AI visual self-review loop to let the agent "see" its work.
+ *
+ * @returns Image data (base64 + media type + full data URL), or null on failure
+ */
+export async function captureLayersImage(
+  layers: Layer[],
+  components: Component[] = [],
+): Promise<{ data: string; mediaType: string; dataUrl: string } | null> {
+  try {
+    const blob = await captureLayersAsBlob(layers, components);
+    if (!blob) return null;
+    const dataUrl = await blobToDataUrl(blob);
+    const comma = dataUrl.indexOf(',');
+    if (comma === -1) return null;
+    return { data: dataUrl.slice(comma + 1), mediaType: blob.type || 'image/png', dataUrl };
+  } catch (error) {
+    console.error('Error capturing layers image:', error);
+    return null;
+  }
+}
+
 /**
  * Generate and upload a component thumbnail.
  * Fire-and-forget: runs in background, deduplicates concurrent calls per component.
