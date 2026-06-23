@@ -91,7 +91,7 @@ import { useLocalisationStore } from '@/stores/useLocalisationStore';
 import { useLayerLocks } from '@/hooks/use-layer-locks';
 
 // 6. Utils, APIs, lib
-import { classesToDesign, mergeDesign, removeConflictsForClass } from '@/lib/tailwind-class-mapper';
+import { classesToDesign, mergeDesign, removeConflictsForClass, removeRedundantSpacingShorthands } from '@/lib/tailwind-class-mapper';
 import { getStyleIds } from '@/lib/layer-style-utils';
 import { resolveLayerClasses, chipClasses } from '@/lib/layer-style-resolve';
 import { buildDesign } from '@/lib/import/design';
@@ -873,7 +873,7 @@ const RightSidebar = React.memo(function RightSidebar({
     if (showTextStyleControls && activeTextStyleKey) {
       if (classesArray.includes(trimmedClass)) return;
       const classesWithoutConflicts = removeConflictsForClass(classesArray, trimmedClass);
-      const newClasses = [...classesWithoutConflicts, trimmedClass].join(' ');
+      const newClasses = removeRedundantSpacingShorthands([...classesWithoutConflicts, trimmedClass]).join(' ');
       const parsedDesign = classesToDesign([trimmedClass]);
       const currentTextStyles = selectedLayer.textStyles ?? { ...DEFAULT_TEXT_STYLES };
       const currentTextStyle = currentTextStyles[activeTextStyleKey] || { design: {}, classes: '' };
@@ -895,7 +895,7 @@ const RightSidebar = React.memo(function RightSidebar({
     if (chip) {
       if (activeChipClassTokens.includes(trimmedClass)) return;
       const withoutConflicts = removeConflictsForClass(activeChipClassTokens, trimmedClass);
-      applyChipClasses(chip, [...withoutConflicts, trimmedClass].join(' '));
+      applyChipClasses(chip, removeRedundantSpacingShorthands([...withoutConflicts, trimmedClass]).join(' '));
       setCurrentClassInput('');
       return;
     }
@@ -903,7 +903,7 @@ const RightSidebar = React.memo(function RightSidebar({
     // Style-less layer: update the layer's own classes.
     if (classesArray.includes(trimmedClass)) return;
     const classesWithoutConflicts = removeConflictsForClass(classesArray, trimmedClass);
-    const newClasses = [...classesWithoutConflicts, trimmedClass].join(' ');
+    const newClasses = removeRedundantSpacingShorthands([...classesWithoutConflicts, trimmedClass]).join(' ');
     const parsedDesign = classesToDesign([trimmedClass]);
     const updatedDesign = mergeDesign(selectedLayer.design, parsedDesign);
     handleLayerUpdate(selectedLayer.id, { classes: newClasses, design: updatedDesign });
