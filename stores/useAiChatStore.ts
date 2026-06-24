@@ -16,6 +16,16 @@ export interface ChatToolCall {
   ok?: boolean;
 }
 
+/**
+ * An ordered fragment of an assistant turn. Tracking text and tool calls as a
+ * single chronological list (rather than separate fields) lets the UI render
+ * them interleaved in the order they streamed in, instead of always hoisting
+ * the tool checklist above the reply.
+ */
+export type ChatMessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'tool'; call: ChatToolCall };
+
 /** A preview of an image the user attached to a message. */
 export interface ChatImage {
   id: string;
@@ -27,6 +37,11 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;
   toolCalls: ChatToolCall[];
+  /**
+   * Ordered text/tool fragments for assistant turns, used for rendering. `text`
+   * and `toolCalls` are kept in sync for history, persistence, and review logic.
+   */
+  parts?: ChatMessagePart[];
   images?: ChatImage[];
   /** True for the auto-generated visual self-review turn (rendered compactly). */
   review?: boolean;
@@ -216,6 +231,7 @@ function stripMessageForStorage(message: ChatMessage): ChatMessage {
     role: message.role,
     text: message.text,
     toolCalls: message.toolCalls,
+    parts: message.parts,
     review: message.review,
   };
 }
@@ -276,7 +292,7 @@ export const useAiChatStore = create<AiChatStore>()(
           images: images.length > 0 ? images.map((img) => ({ id: newId(), dataUrl: img.dataUrl })) : undefined,
           review: isReview || undefined,
         };
-        const assistantMessage: ChatMessage = { id: newId(), role: 'assistant', text: '', toolCalls: [] };
+        const assistantMessage: ChatMessage = { id: newId(), role: 'assistant', text: '', toolCalls: [], parts: [] };
 
         // Snapshot the active page before a real (non-review) turn so the user can
         // revert this turn's layout changes in one click.
@@ -508,6 +524,22 @@ export const useAiChatStore = create<AiChatStore>()(
   ),
 );
 
+/**
+ * Append streamed text to the ordered parts list, merging into the trailing
+ * text fragment when the last part is text so a contiguous reply stays a single
+ * markdown block.
+ */
+function appendTextPart(parts: ChatMessagePart[] | undefined, text: string): ChatMessagePart[] {
+  const next = parts ? [...parts] : [];
+  const last = next[next.length - 1];
+  if (last && last.type === 'text') {
+    next[next.length - 1] = { type: 'text', text: last.text + text };
+  } else {
+    next.push({ type: 'text', text });
+  }
+  return next;
+}
+
 function applyEvent(
   event: RuntimeEvent,
   patchAssistant: (updater: (message: ChatMessage) => ChatMessage) => void,
@@ -515,15 +547,31 @@ function applyEvent(
 ): void {
   switch (event.type) {
     case 'text':
-      patchAssistant((m) => ({ ...m, text: m.text + event.text }));
+      patchAssistant((m) => ({
+        ...m,
+        text: m.text + event.text,
+        parts: appendTextPart(m.parts, event.text),
+      }));
       break;
     case 'tool_call':
-      patchAssistant((m) => ({ ...m, toolCalls: [...m.toolCalls, { id: event.id, name: event.name }] }));
+      patchAssistant((m) => {
+        const call: ChatToolCall = { id: event.id, name: event.name };
+        return {
+          ...m,
+          toolCalls: [...m.toolCalls, call],
+          parts: [...(m.parts ?? []), { type: 'tool', call }],
+        };
+      });
       break;
     case 'tool_result':
       patchAssistant((m) => ({
         ...m,
         toolCalls: m.toolCalls.map((call) => (call.id === event.id ? { ...call, ok: event.ok } : call)),
+        parts: (m.parts ?? []).map((part) =>
+          part.type === 'tool' && part.call.id === event.id
+            ? { type: 'tool', call: { ...part.call, ok: event.ok } }
+            : part,
+        ),
       }));
       break;
     case 'usage':
