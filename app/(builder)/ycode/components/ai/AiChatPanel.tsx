@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -65,6 +66,61 @@ function flattenLayerMentions(layers: Layer[], acc: Mention[] = []): Mention[] {
     if (layer.children?.length) flattenLayerMentions(layer.children, acc);
   }
   return acc;
+}
+
+const MENTION_ICON: Record<Mention['type'], 'page' | 'database' | 'layers'> = {
+  page: 'page',
+  collection: 'database',
+  layer: 'layers',
+};
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Inline reference badge shown inside a sent user message (read-only). */
+function MentionBadge({ type, label }: { type: Mention['type']; label: string }) {
+  return (
+    <Badge
+      variant="secondary"
+      className="h-[1.125rem] gap-1 rounded-md px-1 align-middle text-[12px] font-normal [&>svg]:size-2.5"
+    >
+      <Icon name={MENTION_ICON[type] ?? 'layers'} className="shrink-0" />
+      <span className="max-w-[140px] truncate">{label}</span>
+    </Badge>
+  );
+}
+
+/** Render a sent message, swapping each "@label" token for its reference badge. */
+function MessageTextWithMentions({ text, mentions }: { text: string; mentions?: Mention[] }) {
+  if (!mentions || mentions.length === 0) return <>{text}</>;
+
+  const byLabel = new Map(mentions.map((mention) => [mention.label, mention]));
+  // Longest-first so "@Hero Section" wins over a shorter "@Hero" prefix.
+  const labels = [...new Set(mentions.map((mention) => mention.label))]
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .map(escapeRegExp);
+  if (labels.length === 0) return <>{text}</>;
+
+  const regex = new RegExp(`@(${labels.join('|')})`, 'g');
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    const mention = byLabel.get(match[1]);
+    nodes.push(
+      <MentionBadge
+        key={key++} type={mention?.type ?? 'layer'}
+        label={match[1]}
+      />,
+    );
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return <>{nodes}</>;
 }
 
 interface AiChatPanelProps {
@@ -420,7 +476,7 @@ function MessageBubble({
 
   if (message.role === 'user') {
     return (
-      <div className="self-end max-w-[85%] flex flex-col items-end gap-1.5">
+      <div className="self-end max-w-[100%] flex flex-col items-end gap-1.5">
         {message.images && message.images.length > 0 && (
           <div className="flex flex-wrap justify-end gap-1.5">
             {message.images.map((image) => (
@@ -435,8 +491,8 @@ function MessageBubble({
           </div>
         )}
         {message.text && (
-          <div className="rounded-lg bg-primary text-primary-foreground px-3 py-2 text-xs whitespace-pre-wrap break-words">
-            {message.text}
+          <div className="rounded-xl rounded-br-sm bg-secondary border border-border text-current px-3 py-2 text-xs whitespace-pre-wrap break-words">
+            <MessageTextWithMentions text={message.text} mentions={message.mentions} />
           </div>
         )}
         {message.reverted ? (

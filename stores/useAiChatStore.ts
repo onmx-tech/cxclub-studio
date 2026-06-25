@@ -43,6 +43,8 @@ export interface ChatMessage {
    */
   parts?: ChatMessagePart[];
   images?: ChatImage[];
+  /** Layer/page/collection references the user attached as inline pills. */
+  mentions?: Mention[];
   /** True for the auto-generated visual self-review turn (rendered compactly). */
   review?: boolean;
   /** True while a pre-turn page snapshot exists and can be restored (not persisted). */
@@ -336,6 +338,7 @@ export const useAiChatStore = create<AiChatStore>()(
           text: promptText,
           toolCalls: [],
           images: images.length > 0 ? images.map((img) => ({ id: newId(), dataUrl: img.dataUrl })) : undefined,
+          mentions: attachment?.mentions && attachment.mentions.length > 0 ? attachment.mentions : undefined,
           review: isReview || undefined,
         };
         const assistantMessage: ChatMessage = { id: newId(), role: 'assistant', text: '', toolCalls: [], parts: [] };
