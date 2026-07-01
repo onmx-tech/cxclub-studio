@@ -466,8 +466,8 @@ function ChatHistoryMenu({
 
 function EmptyState({ onPick, disabled }: { onPick: (text: string) => void; disabled: boolean }) {
   return (
-    <div className="flex flex-col gap-3 mt-2">
-      <p className="text-xs text-muted-foreground">
+    <div className="flex-1 flex flex-col justify-center gap-3">
+      <p className="text-xs text-muted-foreground text-center">
         Describe what you want to build. The AI can create sections, edit elements, manage content, and more.
       </p>
       <div className="flex flex-col gap-2">
