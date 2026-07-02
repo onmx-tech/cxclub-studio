@@ -634,8 +634,14 @@ function groupParts(parts: ChatMessagePart[]): PartGroup[] {
 }
 
 /** The intermediate narration + tool steps, shown inside the collapsed trail.
- * Narration text is dimmed so the closing summary below stays the focus. */
-function ThinkingTrail({ parts }: { parts: ChatMessagePart[] }) {
+ * Narration text is dimmed so the closing summary below stays the focus.
+ *
+ * While streaming, narration is rendered as plain text rather than markdown:
+ * the text grows a token at a time and re-parsing markdown (marked + DOMPurify)
+ * on every token is expensive and flickers on half-written syntax. The trail
+ * collapses once the turn finishes, so the full markdown render only runs when
+ * the user re-expands it. */
+function ThinkingTrail({ parts, streaming }: { parts: ChatMessagePart[]; streaming: boolean }) {
   const groups = groupParts(parts);
   if (groups.length === 0) return null;
   return (
@@ -649,7 +655,11 @@ function ThinkingTrail({ parts }: { parts: ChatMessagePart[] }) {
           </div>
         ) : (
           <div key={index} className="opacity-60">
-            <MarkdownText text={group.text} />
+            {streaming ? (
+              <div className="text-xs leading-relaxed break-words whitespace-pre-wrap">{group.text}</div>
+            ) : (
+              <MarkdownText text={group.text} />
+            )}
           </div>
         ),
       )}
@@ -725,7 +735,7 @@ function ThoughtDisclosure({
       </button>
       {expanded && (
         <div className="ml-1 border-l border-border pl-2.5">
-          <ThinkingTrail parts={parts} />
+          <ThinkingTrail parts={parts} streaming={streaming} />
         </div>
       )}
     </div>
