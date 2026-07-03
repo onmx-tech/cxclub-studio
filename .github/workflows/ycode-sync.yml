@@ -1,0 +1,56 @@
+# Sincroniza o export estático do ycode com os portais do cxclube-beta.
+# Publica em public/viagens/<slug>${DEST_SUFFIX}/ — com sufixo "-v2" até a
+# virada pós-validação (aí o sufixo vira vazio e substitui o portal live).
+name: ycode-sync
+on:
+  push:
+    branches: [ycode-export]
+
+env:
+  DEST_SUFFIX: "-v2"
+  SLUGS: "machu-picchu-e-cusco"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout export
+        uses: actions/checkout@v4
+        with:
+          ref: ycode-export
+          path: export
+
+      - name: Checkout cxclube-beta
+        uses: actions/checkout@v4
+        with:
+          repository: onmx-tech/cxclube-beta
+          token: ${{ secrets.CXCLUBE_BETA_TOKEN }}
+          path: beta
+
+      - name: Sync portais
+        run: |
+          set -euo pipefail
+          for slug in $SLUGS; do
+            src="export/$slug"
+            [ -d "$src" ] || { echo "skip $slug (sem export)"; continue; }
+            dest="beta/public/viagens/${slug}${DEST_SUFFIX}"
+            rm -rf "$dest" && mkdir -p "$dest"
+            cp -R "$src/." "$dest/"
+            [ -d export/a ] && cp -R export/a "$dest/a"
+            # assets absolutos -> relativos (funcionam sob o <base> injetado)
+            find "$dest" -name "*.html" -exec sed -i 's|/a/|a/|g' {} +
+            # <base> garante resolução com ou sem barra final na URL
+            sed -i "s|<head>|<head><base href=\"/viagens/${slug}${DEST_SUFFIX}/\">|" "$dest/index.html"
+            # review widget (só ativa com ?review=<slug>)
+            sed -i 's|</body>|<script src="/review.js"></script></body>|' "$dest/index.html"
+          done
+
+      - name: Commit no cxclube-beta
+        run: |
+          cd beta
+          git config user.name "ycode-sync"
+          git config user.email "hello@merinno.com"
+          git add public/viagens
+          git diff --cached --quiet && { echo "nada a sincronizar"; exit 0; }
+          git commit -m "chore(ycode-sync): portais @ ${GITHUB_SHA::7}"
+          git push
