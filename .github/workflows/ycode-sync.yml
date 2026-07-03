@@ -35,8 +35,12 @@ jobs:
             src="export/$slug"
             [ -d "$src" ] || { echo "skip $slug (sem export)"; continue; }
             dest="beta/public/viagens/${slug}${DEST_SUFFIX}"
+            # preserva o apresentar.html (casca do modo Apresentar — não vem do export)
+            apresentar=""
+            [ -f "$dest/apresentar.html" ] && apresentar="$(mktemp)" && cp "$dest/apresentar.html" "$apresentar"
             rm -rf "$dest" && mkdir -p "$dest"
             cp -R "$src/." "$dest/"
+            [ -n "$apresentar" ] && cp "$apresentar" "$dest/apresentar.html"
             # assets ficam ABSOLUTOS em /a/ na raiz (nada de reescrever paths:
             # sed em /a/ quebra os seletores Tailwind escapados \/a\/ do CSS)
             [ -d export/a ] && mkdir -p beta/public/a && cp -R export/a/. beta/public/a/
