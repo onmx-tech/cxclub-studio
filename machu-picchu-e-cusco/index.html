@@ -2395,12 +2395,15 @@
     document.addEventListener('click', function(e){
       var go = e.target.closest('[data-go]');
       if (go) { activate(go.getAttribute('data-go')); return; }
-      if (!isApp()) return;
       var a = e.target.closest('a[href*="#lyr-"]');
       if (a) {
         var id = a.getAttribute('href').split('#')[1];
         var key = SEC2KEY[id];
-        if (key) { e.preventDefault(); activate(key); }
+        if (!key) return;
+        e.preventDefault();
+        if (isApp()) { activate(key); return; }
+        var alvo = document.querySelector('[data-sec="' + key + '"]');
+        if (alvo) alvo.scrollIntoView({behavior: 'smooth', block: 'start'});
       }
     }, true);
     mq.addEventListener ? mq.addEventListener('change', applyMode) : mq.addListener(applyMode);
