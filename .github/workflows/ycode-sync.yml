@@ -40,7 +40,7 @@ jobs:
             [ -f "$dest/apresentar.html" ] && apresentar="$(mktemp)" && cp "$dest/apresentar.html" "$apresentar"
             rm -rf "$dest" && mkdir -p "$dest"
             cp -R "$src/." "$dest/"
-            [ -n "$apresentar" ] && cp "$apresentar" "$dest/apresentar.html"
+            if [ -n "$apresentar" ]; then cp "$apresentar" "$dest/apresentar.html"; fi
             # assets ficam ABSOLUTOS em /a/ na raiz (nada de reescrever paths:
             # sed em /a/ quebra os seletores Tailwind escapados \/a\/ do CSS)
             [ -d export/a ] && mkdir -p beta/public/a && cp -R export/a/. beta/public/a/
@@ -56,4 +56,8 @@ jobs:
           git add public/viagens public/a
           git diff --cached --quiet && { echo "nada a sincronizar"; exit 0; }
           git commit -m "chore(ycode-sync): portais @ ${GITHUB_SHA::7}"
-          git push
+          # main pode ter andado durante a run — rebase e tenta de novo
+          for i in 1 2 3; do
+            git push && break
+            git pull --rebase origin main
+          done
