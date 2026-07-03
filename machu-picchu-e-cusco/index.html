@@ -2369,6 +2369,17 @@
 <script>
 (function(){
   var SEC2KEY = {"lyr-mr429bpa3gkol7": "inicio", "lyr-mr45lpb5l5c5di": "destinos", "lyr-mr48f6qri1rh8c": "roteiro", "lyr-mr48fcgu5x0y2c": "mala", "lyr-mr48jvtnsa22xg": "guia"};
+  function ptScrollTo(y){
+    var y0 = window.scrollY, dy = y - y0, t0 = null, dur = Math.min(900, 300 + Math.abs(dy) * 0.25);
+    function step(ts){
+      if (t0 === null) t0 = ts;
+      var p = Math.min(1, (ts - t0) / dur);
+      var e = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p + 2, 2) / 2;
+      window.scrollTo(0, y0 + dy * e);
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
   var mq = window.matchMedia('(max-width: 767px)');
   function isApp(){ return mq.matches; }
   function activate(key, scroll){
@@ -2411,7 +2422,7 @@
         e.preventDefault();
         if (isApp()) { activate(key); return; }
         var alvo = document.querySelector('[data-sec="' + key + '"]');
-        if (alvo) alvo.scrollIntoView({behavior: 'smooth', block: 'start'});
+        if (alvo) ptScrollTo(alvo.getBoundingClientRect().top + window.scrollY - 64);
       }
     }, true);
     mq.addEventListener ? mq.addEventListener('change', applyMode) : mq.addListener(applyMode);
