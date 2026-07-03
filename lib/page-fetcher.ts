@@ -4653,6 +4653,17 @@ export function layerToHtml(
     attrs.push(`data-layer-id="${escapeHtml(layer.id)}"`);
   }
 
+  // Custom HTML attributes (settings.customAttributes) — parity with the
+  // live SSR renderer, which already emits them. Without this, exported
+  // pages lose data-* hooks that custom-code scripts rely on.
+  if (layer.settings?.customAttributes) {
+    for (const [attrName, attrValue] of Object.entries(layer.settings.customAttributes)) {
+      if (/^[a-zA-Z_][\w.:-]*$/.test(attrName)) {
+        attrs.push(`${attrName}="${escapeHtml(String(attrValue))}"`);
+      }
+    }
+  }
+
   // Serialize a date-preset visibility rule for the static-export
   // client-side runtime. Live SSR ignores this entirely — the layer just
   // renders with its `_dynamicStyles.display` (none / unset) as usual.
