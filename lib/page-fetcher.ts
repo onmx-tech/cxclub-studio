@@ -4653,6 +4653,12 @@ export function layerToHtml(
     attrs.push(`data-layer-id="${escapeHtml(layer.id)}"`);
   }
 
+  // Custom HTML element id (settings.id) — parity with LayerRenderer,
+  // which emits it for anchor links / CSS targeting.
+  if (layer.settings?.id) {
+    attrs.push(`id="${escapeHtml(layer.settings.id)}"`);
+  }
+
   // Custom HTML attributes (settings.customAttributes) — parity with the
   // live SSR renderer, which already emits them. Without this, exported
   // pages lose data-* hooks that custom-code scripts rely on.
