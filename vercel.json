@@ -18,7 +18,10 @@
       "path": "/api/cron/airtable-webhooks",
       "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "ycode-export": false
+    }
+  }
 }
-
-
