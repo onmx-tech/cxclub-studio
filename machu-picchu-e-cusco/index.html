@@ -2169,10 +2169,8 @@
 [data-ics="1"]:hover { box-shadow: inset 0 0 0 1.5px #B5613A !important; }
 [data-car-prev]:hover, [data-car-next]:hover { box-shadow: inset 0 0 0 1.5px #B5613A !important; }
 [data-acc-trigger]:hover { background: #FBF8F1; }
-@keyframes revealUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
-@supports (animation-timeline: view()) {
-  [data-reveal] { animation: revealUp .7s ease both; animation-timeline: view(); animation-range: entry 0% entry 40%; }
-}
+.pt-pre { opacity: 0; transform: translateY(20px); }
+.pt-in { opacity: 1; transform: none; transition: opacity .7s ease, transform .7s ease; }
 
 [data-car-track] { scroll-snap-type: x mandatory; scrollbar-width: none; }
 [data-car-track]::-webkit-scrollbar { display: none; }
@@ -2318,6 +2316,17 @@
       }, {passive: true});
     });
     document.querySelectorAll('[data-acc-trigger],[data-tip-trigger],[data-wx-day],[data-car-prev],[data-car-next],[data-gal-prev],[data-gal-next],[data-gal-thumb],[data-tab],[data-ics],[data-notice-close]').forEach(function(el){ el.style.cursor = 'pointer'; });
+    if ('IntersectionObserver' in window && !window.matchMedia('(max-width: 767px)').matches) {
+      var io = new IntersectionObserver(function(entries){
+        entries.forEach(function(en){
+          if (en.isIntersecting) { en.target.classList.add('pt-in'); en.target.classList.remove('pt-pre'); io.unobserve(en.target); }
+        });
+      }, {rootMargin: '0px 0px -10% 0px'});
+      document.querySelectorAll('[data-reveal]').forEach(function(el, i){
+        if (i === 0) return;
+        el.classList.add('pt-pre'); io.observe(el);
+      });
+    }
     var target = new Date(2026, 6, 15); var now = new Date(); now.setHours(0,0,0,0);
     var days = Math.ceil((target - now) / 86400000);
     var label = days > 1 ? 'faltam ' + days + ' dias' : days === 1 ? 'falta 1 dia' : days === 0 ? 'é hoje!' : 'boa viagem!';
@@ -2355,7 +2364,6 @@
   body.pt-app [data-sec] { display: none !important; }
   body.pt-app [data-sec].pt-active { display: flex !important; }
   body.pt-app { padding-bottom: 74px; }
-  body.pt-app [data-reveal] { animation: none !important; }
 }
 </style>
 <script>
