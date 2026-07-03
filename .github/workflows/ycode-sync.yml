@@ -44,6 +44,8 @@ jobs:
             # assets ficam ABSOLUTOS em /a/ na raiz (nada de reescrever paths:
             # sed em /a/ quebra os seletores Tailwind escapados \/a\/ do CSS)
             [ -d export/a ] && mkdir -p beta/public/a && cp -R export/a/. beta/public/a/
+            # src/srcset relativos ../a/ quebram no iframe do apresentar (index.html explícito) — absolutiza
+            find "$dest" -name "*.html" -exec sed -i 's|\.\./a/|/a/|g' {} +
             # review widget (só ativa com ?review=<slug>)
             sed -i 's|</body>|<script src="/review.js"></script></body>|' "$dest/index.html"
           done
