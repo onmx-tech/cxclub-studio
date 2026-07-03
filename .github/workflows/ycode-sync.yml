@@ -37,11 +37,9 @@ jobs:
             dest="beta/public/viagens/${slug}${DEST_SUFFIX}"
             rm -rf "$dest" && mkdir -p "$dest"
             cp -R "$src/." "$dest/"
-            [ -d export/a ] && cp -R export/a "$dest/a"
-            # assets absolutos -> relativos (funcionam sob o <base> injetado)
-            find "$dest" -name "*.html" -exec sed -i 's|/a/|a/|g' {} +
-            # <base> garante resolução com ou sem barra final na URL
-            sed -i "s|<head>|<head><base href=\"/viagens/${slug}${DEST_SUFFIX}/\">|" "$dest/index.html"
+            # assets ficam ABSOLUTOS em /a/ na raiz (nada de reescrever paths:
+            # sed em /a/ quebra os seletores Tailwind escapados \/a\/ do CSS)
+            [ -d export/a ] && mkdir -p beta/public/a && cp -R export/a/. beta/public/a/
             # review widget (só ativa com ?review=<slug>)
             sed -i 's|</body>|<script src="/review.js"></script></body>|' "$dest/index.html"
           done
@@ -51,7 +49,7 @@ jobs:
           cd beta
           git config user.name "ycode-sync"
           git config user.email "hello@merinno.com"
-          git add public/viagens
+          git add public/viagens public/a
           git diff --cached --quiet && { echo "nada a sincronizar"; exit 0; }
           git commit -m "chore(ycode-sync): portais @ ${GITHUB_SHA::7}"
           git push
