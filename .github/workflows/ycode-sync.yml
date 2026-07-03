@@ -3,8 +3,9 @@
 # virada pós-validação (aí o sufixo vira vazio e substitui o portal live).
 name: ycode-sync
 on:
-  push:
-    branches: [ycode-export]
+  repository_dispatch:
+    types: [ycode-export]
+  workflow_dispatch: {}
 
 env:
   DEST_SUFFIX: "-v2"

@@ -105,6 +105,18 @@ async function pushViaApi(config: ExportConfig, files: OutputFile[]): Promise<nu
     await createRef(repo, branch, commitSha, headers)
   }
 
+  // 6. Fire a repository_dispatch so workflows on the DEFAULT branch can
+  // react to the export. A plain `on: push` trigger never fires here: the
+  // export branch is wiped on every push, so it carries no workflow files.
+  await fetch(`${GITHUB_API}/repos/${repo}/dispatches`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      event_type: 'ycode-export',
+      client_payload: { branch, commit: commitSha },
+    }),
+  }).catch(() => { /* non-fatal — sync can be triggered manually */ })
+
   return files.length
 }
 
