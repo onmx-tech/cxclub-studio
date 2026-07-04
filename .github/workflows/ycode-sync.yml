@@ -1,6 +1,7 @@
 # Sincroniza o export estático do ycode com os portais do cxclube-beta.
-# Publica em public/viagens/<slug>${DEST_SUFFIX}/ — com sufixo "-v2" até a
-# virada pós-validação (aí o sufixo vira vazio e substitui o portal live).
+# SLUGS = pares "slug-no-studio:slug-em-producao" (destino = public/viagens/<destino>/).
+# machu mantém o sufixo -v2 (slug permanente da experiência Studio);
+# portais novos nascem sem sufixo.
 name: ycode-sync
 on:
   repository_dispatch:
@@ -8,8 +9,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  DEST_SUFFIX: "-v2"
-  SLUGS: "machu-picchu-e-cusco"
+  SLUGS: "machu-picchu-e-cusco:machu-picchu-e-cusco-v2 consfit-2026-suica:consfit-2026-suica"
 
 jobs:
   sync:
@@ -31,10 +31,12 @@ jobs:
       - name: Sync portais
         run: |
           set -euo pipefail
-          for slug in $SLUGS; do
+          for pair in $SLUGS; do
+            slug="${pair%%:*}"
+            destslug="${pair##*:}"
             src="export/$slug"
             [ -d "$src" ] || { echo "skip $slug (sem export)"; continue; }
-            dest="beta/public/viagens/${slug}${DEST_SUFFIX}"
+            dest="beta/public/viagens/${destslug}"
             # preserva o apresentar.html (casca do modo Apresentar — não vem do export)
             apresentar=""
             [ -f "$dest/apresentar.html" ] && apresentar="$(mktemp)" && cp "$dest/apresentar.html" "$apresentar"
