@@ -159,9 +159,9 @@ export default function HeaderBar({
   const [theme, setTheme] = useState<'system' | 'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
       const savedTheme = localStorage.getItem('theme') as 'system' | 'light' | 'dark' | null;
-      return savedTheme || 'dark';
+      return savedTheme || 'light'; // CX: default claro (identidade CxClub)
     }
-    return 'dark';
+    return 'light'; // CX: default claro
   });
   const [baseUrl, setBaseUrl] = useState<string>('');
   const [hasUpdate, setHasUpdate] = useState(false);

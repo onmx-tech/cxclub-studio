@@ -34,7 +34,8 @@ export default function AcceptInvitePage() {
 
   // Ensure dark mode is applied
   useEffect(() => {
-    document.documentElement.classList.add('dark');
+    const cxTheme = localStorage.getItem('theme') || 'light'; // CX: respeita escolha; default claro
+    document.documentElement.classList.toggle('dark', cxTheme === 'dark' || (cxTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
     return () => {
       document.documentElement.classList.remove('dark');

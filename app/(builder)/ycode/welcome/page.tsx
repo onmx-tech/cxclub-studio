@@ -99,7 +99,8 @@ export default function WelcomePage() {
 
   // Ensure dark mode is applied on client-side navigation
   useEffect(() => {
-    document.documentElement.classList.add('dark');
+    const cxTheme = localStorage.getItem('theme') || 'light'; // CX: respeita escolha; default claro
+    document.documentElement.classList.toggle('dark', cxTheme === 'dark' || (cxTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
 
     // Cleanup: remove dark class when leaving the page
     return () => {

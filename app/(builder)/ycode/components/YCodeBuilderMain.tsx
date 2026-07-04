@@ -705,7 +705,8 @@ export default function YCodeBuilder({ children }: YCodeBuilderProps = {} as YCo
   // Ensure dark mode is applied for login screen on client-side navigation
   useEffect(() => {
     if (!user) {
-      document.documentElement.classList.add('dark');
+      const cxTheme = localStorage.getItem('theme') || 'light'; // CX: respeita escolha; default claro
+    document.documentElement.classList.toggle('dark', cxTheme === 'dark' || (cxTheme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches));
     }
   }, [user]);
 
