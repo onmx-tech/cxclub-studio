@@ -118,6 +118,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCxFeatures } from '@/hooks/use-cx-features'; // CX: feature flags
 
 interface RightSidebarProps {
   onLayerUpdate: (layerId: string, updates: Partial<Layer>) => void;
@@ -143,6 +144,7 @@ const RightSidebar = React.memo(function RightSidebar({
   const { openComponent, urlState, updateQueryParams } = useEditorActions();
   const { routeType } = useEditorUrl();
   const { isLocalizing, currentLocale, defaultLocale } = useLocalizationMode();
+  const cxFeatures = useCxFeatures(); // CX: feature flags
 
   // Translation editor state + store actions used by the per-layer Translate
   // panel rendered inside the Settings tab when a non-default locale is active.
@@ -166,6 +168,14 @@ const RightSidebar = React.memo(function RightSidebar({
   const [activeTab, setActiveTab] = useState<'design' | 'settings' | 'interactions' | undefined>(
     urlState.rightTab || 'design'
   );
+
+  // CX: animations flag hides the "Interactions" tab — bounce off it (e.g.
+  // restored from the URL) if the flag is off.
+  useEffect(() => {
+    if (!cxFeatures.animations && activeTab === 'interactions') {
+      setActiveTab('design');
+    }
+  }, [cxFeatures.animations, activeTab]);
 
   // Track last user-initiated change to prevent URL→state sync loops
   const lastUserChangeRef = useRef<number>(0);
@@ -1921,7 +1931,10 @@ const RightSidebar = React.memo(function RightSidebar({
           <TabsList className="w-full">
             <TabsTrigger value="design" disabled={isLocalizing}>Design</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="interactions" disabled={isLocalizing}>Interactions</TabsTrigger>
+            {/* CX: animations flag */}
+            {cxFeatures.animations && (
+              <TabsTrigger value="interactions" disabled={isLocalizing}>Interactions</TabsTrigger>
+            )}
           </TabsList>
         </div>
 

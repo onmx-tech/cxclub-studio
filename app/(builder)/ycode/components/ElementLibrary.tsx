@@ -47,6 +47,7 @@ import { useComponentsStore } from '@/stores/useComponentsStore';
 import { useEditorActions } from '@/hooks/use-editor-url';
 import { useLocalizationMode } from '@/hooks/use-localization-mode';
 import type { UseLiveLayerUpdatesReturn } from '@/hooks/use-live-layer-updates';
+import { useCxFeatures } from '@/hooks/use-cx-features'; // CX: feature flags
 
 /**
  * Element Button with drag support
@@ -296,6 +297,7 @@ export default function ElementLibrary({ isOpen, onClose, liveLayerUpdates }: El
   const endCanvasDrag = useEditorStore((s) => s.endCanvasDrag);
   const leftSidebarWidth = useEditorStore((s) => s.leftSidebarWidth);
   const { isLocalizing } = useLocalizationMode();
+  const cxFeatures = useCxFeatures(); // CX: feature flags
 
   const components = useComponentsStore((s) => s.components);
   const componentDrafts = useComponentsStore((s) => s.componentDrafts);
@@ -322,6 +324,15 @@ export default function ElementLibrary({ isOpen, onClose, liveLayerUpdates }: El
     }
     return 'elements';
   });
+
+  // CX: components flag hides the "Components" tab — bounce off it if it was
+  // the last-active tab (persisted in sessionStorage) when the flag is off.
+  useEffect(() => {
+    if (!cxFeatures.components && activeTab === 'components') {
+      setActiveTab('elements');
+    }
+  }, [cxFeatures.components, activeTab]);
+
   const [componentSearch, setComponentSearch] = useState('');
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [componentToRename, setComponentToRename] = useState<Component | null>(null);
@@ -1496,7 +1507,8 @@ export default function ElementLibrary({ isOpen, onClose, liveLayerUpdates }: El
               <TabsList className="w-full">
                 <TabsTrigger value="elements">Elements</TabsTrigger>
                 <TabsTrigger value="layouts">Layouts</TabsTrigger>
-                <TabsTrigger value="components">Components</TabsTrigger>
+                {/* CX: components flag */}
+                {cxFeatures.components && <TabsTrigger value="components">Components</TabsTrigger>}
               </TabsList>
             </div>
 
