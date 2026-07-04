@@ -16,4 +16,6 @@ export const SETTINGS_NAV_ITEMS: SettingsNavItem[] = [
   { id: 'email', label: 'Email', path: '/ycode/settings/email' },
   { id: 'templates', label: 'Templates', path: '/ycode/settings/templates' },
   { id: 'updates', label: 'Updates', path: '/ycode/settings/updates' },
+  // CX: CxClub feature-flags reactivation panel
+  { id: 'cxclub', label: 'CxClub', path: '/ycode/settings/cxclub' },
 ];
