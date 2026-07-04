@@ -1,4 +1,5 @@
 import '@/app/globals.css';
+import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import RootLayoutShell, { defaultMetadata } from '@/components/RootLayoutShell';
 
@@ -10,7 +11,13 @@ const inter = Inter({
   display: 'swap',
 });
 
-export const metadata = defaultMetadata;
+// CX: browser <title> for the builder itself only — `defaultMetadata` stays
+// untouched since it also serves as the public-site fallback in
+// app/(site)/layout.tsx when a client hasn't set their own title/favicon.
+export const metadata: Metadata = {
+  ...defaultMetadata,
+  title: 'CxClub Studio',
+};
 
 export default function BuilderLayout({
   children,

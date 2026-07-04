@@ -39,6 +39,9 @@ import { Separator } from '@/components/ui/separator';
 import { BackupRestoreDialog } from '@/components/project/BackupRestoreDialog';
 import { isCloudVersion } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
+// CX: feature flags + CxClub Studio brand mark
+import { useCxFeatures } from '@/hooks/use-cx-features';
+import CxLogoMark from '@/components/CxLogoMark';
 
 interface HeaderBarProps {
   user: User | null;
@@ -85,6 +88,7 @@ export default function HeaderBar({
   const pathname = usePathname();
   const pageDropdownRef = useRef<HTMLDivElement>(null);
   const { isEditor, canManageSettings, canManageMembers } = useRole();
+  const cxFeatures = useCxFeatures(); // CX: feature flags
   const editorSidebarTab = useEditorStore((s) => s.activeSidebarTab);
   const currentPageCollectionItemId = useEditorStore((s) => s.currentPageCollectionItemId);
   const storeCurrentPageId = useEditorStore((s) => s.currentPageId);
@@ -399,36 +403,12 @@ export default function HeaderBar({
           <DropdownMenuTrigger asChild>
             <Button
               variant="secondary" size="sm"
-              className="size-8!"
+              className="size-8! bg-neutral-900 hover:bg-neutral-800"
             >
-              <div className="dark:text-white text-secondary-foreground">
-                <svg
-                  className="size-3.5 fill-current" viewBox="0 0 24 24"
-                  version="1.1" xmlns="http://www.w3.org/2000/svg"
-                >
-                  <g
-                    id="Symbols" stroke="none"
-                    strokeWidth="1" fill="none"
-                    fillRule="evenodd"
-                  >
-                    <g id="Sidebar" transform="translate(-30.000000, -30.000000)">
-                      <g id="Ycode">
-                        <g transform="translate(30.000000, 30.000000)">
-                          <rect
-                            id="Rectangle" x="0"
-                            y="0" width="24"
-                            height="24"
-                          />
-                          <path
-                            id="CurrentFill" d="M11.4241533,0 L11.4241533,5.85877951 L6.024,8.978 L12.6155735,12.7868008 L10.951,13.749 L23.0465401,6.75101349 L23.0465401,12.6152717 L3.39516096,23.9856666 L3.3703726,24 L3.34318129,23.9827156 L0.96,22.4713365 L0.96,16.7616508 L3.36417551,18.1393242 L7.476,15.76 L0.96,11.9090099 L0.96,6.05375516 L11.4241533,0 Z"
-                            className="fill-current"
-                          />
-                        </g>
-                      </g>
-                    </g>
-                  </g>
-                </svg>
-              </div>
+              {/* CX: CxClub Studio mark (was the ycode "Y" SVG). Fixed dark
+                  background regardless of theme so the white icon always
+                  has contrast. */}
+              <CxLogoMark size={16} />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
@@ -456,7 +436,8 @@ export default function HeaderBar({
               File manager
             </DropdownMenuItem>
 
-            {canManageSettings && (
+            {/* CX: integrations flag hides the entry point (static-export lives inside) */}
+            {canManageSettings && cxFeatures.integrations && (
               <>
                 <DropdownMenuItem
                   onClick={() => router.push('/ycode/integrations/apps')}
@@ -470,6 +451,15 @@ export default function HeaderBar({
                   Backup &amp; Restore
                 </DropdownMenuItem>
               </>
+            )}
+
+            {/* CX: Backup & Restore doesn't depend on integrations — keep it available even when that flag is off */}
+            {canManageSettings && !cxFeatures.integrations && (
+              <DropdownMenuItem
+                onClick={() => setShowTransferDialog(true)}
+              >
+                Backup &amp; Restore
+              </DropdownMenuItem>
             )}
 
             <DropdownMenuSeparator />
@@ -575,29 +565,33 @@ export default function HeaderBar({
               Design
             </Button>
           )}
-          <Button
-            variant={activeNavButton === 'cms' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => {
-              const isDesignRoute = routeType === 'layers' || routeType === 'page' || routeType === 'component';
-              if (isDesignRoute) {
-                setLastDesignUrl(window.location.pathname + window.location.search);
-              }
-              setOptimisticNav('cms');
-              setActiveSidebarTab('cms');
-              const targetCollectionId = storeSelectedCollectionId || collections[0]?.id;
-              if (targetCollectionId) {
-                setSelectedCollectionId(targetCollectionId);
-                navigateToCollection(targetCollectionId);
-              } else {
-                navigateToCollections();
-              }
-            }}
-          >
-            <Icon name="database" />
-            CMS
-          </Button>
-          {!isEditor && (
+          {/* CX: collections flag hides the CMS nav entry */}
+          {cxFeatures.collections && (
+            <Button
+              variant={activeNavButton === 'cms' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                const isDesignRoute = routeType === 'layers' || routeType === 'page' || routeType === 'component';
+                if (isDesignRoute) {
+                  setLastDesignUrl(window.location.pathname + window.location.search);
+                }
+                setOptimisticNav('cms');
+                setActiveSidebarTab('cms');
+                const targetCollectionId = storeSelectedCollectionId || collections[0]?.id;
+                if (targetCollectionId) {
+                  setSelectedCollectionId(targetCollectionId);
+                  navigateToCollection(targetCollectionId);
+                } else {
+                  navigateToCollections();
+                }
+              }}
+            >
+              <Icon name="database" />
+              CMS
+            </Button>
+          )}
+          {/* CX: forms flag hides the Forms nav entry */}
+          {!isEditor && cxFeatures.forms && (
             <Button
               variant={activeNavButton === 'forms' ? 'secondary' : 'ghost'}
               size="sm"
@@ -618,7 +612,8 @@ export default function HeaderBar({
       </div>
 
       <div className="flex gap-1.5 items-center justify-center">
-        <LocaleSelector />
+        {/* CX: localization flag hides the locale switcher */}
+        {cxFeatures.localization && <LocaleSelector />}
 
         <div className="h-5">
           <Separator orientation="vertical" />
