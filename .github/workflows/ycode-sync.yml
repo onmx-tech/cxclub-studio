@@ -1,7 +1,8 @@
 # Sincroniza o export estático do ycode com os portais do cxclube-beta.
 # SLUGS = pares "slug-no-studio:slug-em-producao" (destino = public/viagens/<destino>/).
-# machu publica no slug do cliente (sem sufixo) E no -v2 (backup/review);
-# ambos servem o mesmo portal Studio. Portais novos nascem sem sufixo.
+# CONGELADO (review Ingrid jul/2026): Machu só publica no -v2 (preview) enquanto os
+# comentários da Ingrid não forem aprovados pelo Thalyson — NÃO restaurar o par
+# sem sufixo (machu-picchu-e-cusco:machu-picchu-e-cusco) antes do OK explícito.
 name: ycode-sync
 on:
   repository_dispatch:
@@ -9,7 +10,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  SLUGS: "machu-picchu-e-cusco:machu-picchu-e-cusco machu-picchu-e-cusco:machu-picchu-e-cusco-v2 consfit-2026-suica:consfit-2026-suica"
+  SLUGS: "machu-picchu-e-cusco:machu-picchu-e-cusco-v2 consfit-2026-suica:consfit-2026-suica"
 
 jobs:
   sync:
