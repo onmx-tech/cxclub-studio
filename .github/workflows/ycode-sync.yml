@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 env:
-  SLUGS: "machu-picchu-e-cusco:machu-picchu-e-cusco-preview consfit-2026-suica:consfit-2026-suica"
+  SLUGS: "machu-picchu-e-cusco:machu-picchu-e-cusco-v2 consfit-2026-suica:consfit-2026-suica"
 
 jobs:
   sync:
